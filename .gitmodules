@@ -1,3 +1,6 @@
 [submodule "miosix-kernel"]
 	path = miosix-kernel
 	url = https://miosix.org/git-public/miosix-kernel.git
+[submodule "mxgui"]
+	path = mxgui
+	url = https://miosix.org/git-public/mxgui.git
