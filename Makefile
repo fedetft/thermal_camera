@@ -17,7 +17,7 @@ SUBDIRS := $(KPATH) mxgui
 ## List here your source files (both .s, .c and .cpp)
 ##
 SRC :=                                  \
-main.cpp
+main.cpp display_er_oledm015.cpp
 
 ##
 ## List here additional static libraries with relative path
