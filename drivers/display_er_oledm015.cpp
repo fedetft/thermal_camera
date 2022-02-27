@@ -29,7 +29,7 @@
 #include <miosix.h>
 #include <algorithm>
 #include <line.h>
-#include <hwmapping.h>
+#include "hwmapping.h"
 
 using namespace std;
 using namespace miosix;
