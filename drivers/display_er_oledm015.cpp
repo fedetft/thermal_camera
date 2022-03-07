@@ -188,7 +188,7 @@ DisplayErOledm015::DisplayErOledm015() : buffer(nullptr)
     SPI1->CR1=SPI_CR1_SSM  //No HW cs
             | SPI_CR1_SSI
             | SPI_CR1_SPE  //SPI enabled
-            | SPI_CR1_BR_0 //SPI clock 50/4=12.5 MHz (Fmax=20MHz)
+            | SPI_CR1_BR_0 //SPI clock 60/4=15 MHz (Fmax=20MHz)
             | SPI_CR1_MSTR;//Master mode
 
     res::high();

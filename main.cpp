@@ -1,3 +1,10 @@
+/*
+ * STM32F205RC
+ * SPI1 speed (display) 15MHz
+ * I2C1 speed (sensor)  227kHz TODO
+ * 
+ * read time = 0.335475054s draw time = 0.087886463s
+ */
 
 #include <cstdio>
 #include <algorithm>
