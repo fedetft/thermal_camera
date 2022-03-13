@@ -3,7 +3,7 @@
  * SPI1 speed (display) 15MHz
  * I2C1 speed (sensor)  227kHz TODO
  * 
- * read time = 0.335475054s draw time = 0.087886463s
+ * read time = 0.397s draw time = 0.088s
  */
 
 #include <cstdio>
@@ -40,7 +40,8 @@ float temperature[nx*ny];
 
 float getTempAt(int x, int y)
 {
-    return temperature[x + (ny - 1 - y) * nx];
+    //return temperature[x + (ny - 1 - y) * nx];
+    return temperature[(nx - 1 - x) + y * nx];
 }
 
 Color pixMap(float t, float m, float r)
@@ -74,7 +75,7 @@ Color interpolate2d(int x, int y, float m, float r)
 
 void run(Display& display)
 {
-        MLX90640_I2CInit();
+    MLX90640_I2CInit();
     
     //Disabled as it's not an improvement
     //By TFT: required by modified version of MLX90640_GetFrameData
@@ -170,8 +171,6 @@ void run(Display& display)
 
 int main()
 {
-    puts("Working");
-    
     keep_on::mode(Mode::OUTPUT);
     keep_on::high();
     on_btn::mode(Mode::INPUT_PULL_DOWN);
@@ -181,15 +180,11 @@ int main()
     {
         DrawingContext dc(display);
         dc.setFont(tahoma);
-        dc.write(Point(0,0),"Testing display...");
+        dc.write(Point(0,0),"Miosix thermal camera");
+        dc.write(Point(0,15),"experimental firmware");
     }
     
-    while(on_btn::value()==1)
-    {
-       Thread::sleep(100);
-       puts("Waiting for ON release");
-    }
-    
+    while(on_btn::value()==1) Thread::sleep(100);
     Thread::sleep(200);
     
     run(display);
