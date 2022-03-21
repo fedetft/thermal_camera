@@ -29,7 +29,7 @@ void registerDisplayHook(DisplayManager& dm)
 } //namespace mxgui
 
 const unsigned char MLX90640_address = 0x33;
-const float ta_shift = 8; //Default shift for MLX90640 in open air
+const float ta_shift = 8.f; //Default shift for MLX90640 in open air
 
 const int nx = 32, ny = 24;
 const int pixSize = 2; // image becomes 2*63 x 2*47 or 126 x 94 pixels
@@ -73,9 +73,30 @@ Color interpolate2d(int x, int y, float m, float r)
     return pixMap(t / 4.f, m, r);
 }
 
+void dump(unsigned short *data, int size)
+{
+    while(size>0)
+    {
+        int n = min(8, size);
+        for(int i = 0; i < n; i++) iprintf("0x%04x, ",data[i]);
+        putchar('\n');
+        data+=n;
+        size-=n;
+    }
+}
+
 void run(Display& display)
 {
+    //Thread::create([](void*){ for(;;) ; },STACK_MIN,0); //HACK
     MLX90640_I2CInit();
+    
+//     unsigned short controlReg;
+//     auto a = MLX90640_I2CRead(MLX90640_address, 0x800D, 1, &controlReg);
+//     iprintf("%d %d\n",a,controlReg);
+//     a = MLX90640_I2CRead(MLX90640_address, 0x800D, 1, &controlReg);
+//     iprintf("%d %d\n",a,controlReg);
+//     
+//     return;
     
     //Disabled as it's not an improvement
     //By TFT: required by modified version of MLX90640_GetFrameData
@@ -87,9 +108,13 @@ void run(Display& display)
 //             puts("Error writing control reg");
 //     } else puts("Error reading control reg");
     
+    uint16_t *eeMLX90640=new uint16_t[832];
     {
-        uint16_t eeMLX90640[832]; //Temporary buffer
+        //uint16_t eeMLX90640[832]; //Temporary buffer
         if(MLX90640_DumpEE(MLX90640_address, eeMLX90640)) puts("Err 1");
+        unsigned int cksum=0;
+        for(int i=0;i<832;i++) cksum+=eeMLX90640[i];
+        iprintf("EEPROM checksum 0x%x\n",cksum); //0x1788285
         if(MLX90640_ExtractParameters(eeMLX90640, &mlx90640)) puts("Err 2");
     }
     //Note: true rate is half because that's the rate for one half frame
@@ -99,13 +124,37 @@ void run(Display& display)
     //MLX90640_SetRefreshRate(MLX90640_address, 0b101); //Set rate to 16Hz
     //MLX90640_SetRefreshRate(MLX90640_address, 0b111); //Set rate to 64Hz
     
+    uint16_t *mlx90640Frame=new uint16_t[834];
+    
+//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
+//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
+//     
+//     uint16_t *mlx90640Frame2=new uint16_t[834];
+//     
+//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
+//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame2);
+//     
+//     puts("const unsigned short eeprom[] = {");
+//     dump(eeMLX90640,832);
+//     puts("};\n\nconst unsigned short subframe1[] = {");
+//     dump(mlx90640Frame,834);
+//     puts("};\n\nconst unsigned short subframe2[] = {");
+//     dump(mlx90640Frame2,834);
+//     puts("};\n");
+    
+    while(MLX90640_GetFrameData(MLX90640_address, mlx90640Frame) != 1)
+    {
+        putchar('.');
+        fflush(stdout);
+    }
+    
     for(;;)
     {
         auto t1 = getTime();
         // Get temperature map
         for(int i = 0; i < 2; i++) //Read both subpages
         {
-            uint16_t mlx90640Frame[834]; //Temporary buffer
+            //uint16_t mlx90640Frame[834]; //Temporary buffer
             int frameNo = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
             iprintf("%d ", frameNo);
 
@@ -113,7 +162,7 @@ void run(Display& display)
             float Ta = MLX90640_GetTa(mlx90640Frame, &mlx90640);
 
             float tr = Ta - ta_shift; //Reflected temperature based on the sensor ambient temperature
-            float emissivity = 0.95;
+            float emissivity = 0.95f;
 
             MLX90640_CalculateTo(mlx90640Frame, &mlx90640, emissivity, tr, temperature);
         }
