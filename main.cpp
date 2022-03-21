@@ -1,9 +1,9 @@
 /*
  * STM32F205RC
  * SPI1 speed (display) 15MHz
- * I2C1 speed (sensor)  227kHz TODO
+ * I2C1 speed (sensor)  400kHz
  * 
- * read time = 0.397s draw time = 0.088s
+ * read time = 38.4ms draw time = 87.6ms
  */
 
 #include <cstdio>
@@ -40,7 +40,6 @@ float temperature[nx*ny];
 
 float getTempAt(int x, int y)
 {
-    //return temperature[x + (ny - 1 - y) * nx];
     return temperature[(nx - 1 - x) + y * nx];
 }
 
@@ -73,21 +72,11 @@ Color interpolate2d(int x, int y, float m, float r)
     return pixMap(t / 4.f, m, r);
 }
 
-void dump(unsigned short *data, int size)
-{
-    while(size>0)
-    {
-        int n = min(8, size);
-        for(int i = 0; i < n; i++) iprintf("0x%04x, ",data[i]);
-        putchar('\n');
-        data+=n;
-        size-=n;
-    }
-}
+
 
 void run(Display& display)
 {
-    //Thread::create([](void*){ for(;;) ; },STACK_MIN,0); //HACK
+    //Thread::create([](void*){ for(;;) ; },STACK_MIN,1); //HACK
     MLX90640_I2CInit();
     
 //     unsigned short controlReg;
@@ -108,9 +97,8 @@ void run(Display& display)
 //             puts("Error writing control reg");
 //     } else puts("Error reading control reg");
     
-    uint16_t *eeMLX90640=new uint16_t[832];
     {
-        //uint16_t eeMLX90640[832]; //Temporary buffer
+        uint16_t eeMLX90640[832]; //Temporary buffer
         if(MLX90640_DumpEE(MLX90640_address, eeMLX90640)) puts("Err 1");
         unsigned int cksum=0;
         for(int i=0;i<832;i++) cksum+=eeMLX90640[i];
@@ -124,37 +112,13 @@ void run(Display& display)
     //MLX90640_SetRefreshRate(MLX90640_address, 0b101); //Set rate to 16Hz
     //MLX90640_SetRefreshRate(MLX90640_address, 0b111); //Set rate to 64Hz
     
-    uint16_t *mlx90640Frame=new uint16_t[834];
-    
-//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
-//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
-//     
-//     uint16_t *mlx90640Frame2=new uint16_t[834];
-//     
-//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
-//     MLX90640_GetFrameData(MLX90640_address, mlx90640Frame2);
-//     
-//     puts("const unsigned short eeprom[] = {");
-//     dump(eeMLX90640,832);
-//     puts("};\n\nconst unsigned short subframe1[] = {");
-//     dump(mlx90640Frame,834);
-//     puts("};\n\nconst unsigned short subframe2[] = {");
-//     dump(mlx90640Frame2,834);
-//     puts("};\n");
-    
-    while(MLX90640_GetFrameData(MLX90640_address, mlx90640Frame) != 1)
-    {
-        putchar('.');
-        fflush(stdout);
-    }
-    
     for(;;)
     {
         auto t1 = getTime();
         // Get temperature map
         for(int i = 0; i < 2; i++) //Read both subpages
         {
-            //uint16_t mlx90640Frame[834]; //Temporary buffer
+            uint16_t mlx90640Frame[834]; //Temporary buffer
             int frameNo = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
             iprintf("%d ", frameNo);
 
@@ -164,6 +128,7 @@ void run(Display& display)
             float tr = Ta - ta_shift; //Reflected temperature based on the sensor ambient temperature
             float emissivity = 0.95f;
 
+            //TODO: benchmark these calls too
             MLX90640_CalculateTo(mlx90640Frame, &mlx90640, emissivity, tr, temperature);
         }
         puts("");
@@ -198,21 +163,7 @@ void run(Display& display)
         
         auto t3 = getTime();
         
-        //With 2Hz speed, reading takes ~1000ms, drawing takes ~4ms
-        //With a logic analyzer, some more breakdown:
-        //Reading half a frame takes:
-        //- 358ms long I2C read that's polling waiting for the frame to start
-        //- 21ms computation?
-        //- 68ms short I2C read full frame at ~230kHz
-        //- 46ms computation
-        //4Hz is good, 8Hz is a bit too fast
-        //8Hz the slack is 6ms for one half frame, and actually negative for the
-        //second half
         iprintf("read time = %lld draw time = %lld\n", t2 - t1, t3 - t2);
-        
-        //Print temperature map
-//         for(int i = 0; i < 768; i++) printf("%.0f ", temperature[i]);
-//         puts("");
         
         if(on_btn::value()==1) break;
     }
@@ -237,17 +188,6 @@ int main()
     Thread::sleep(200);
     
     run(display);
-    
-//     for(;;)
-//     {
-//         Thread::sleep(100);
-//         if(up_btn::value()==0) puts("UP button");
-//         if(on_btn::value()==1)
-//         {
-//             puts("ON button, bye");
-//             break;
-//         }
-//     }
     
     display.turnOff();
     keep_on::low();
