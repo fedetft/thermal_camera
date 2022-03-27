@@ -1,0 +1,7 @@
+*.o
+*.d
+main.bin
+main.hex
+main.elf
+main.map
+
