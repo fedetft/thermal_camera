@@ -79,11 +79,18 @@ void run(Display& display)
     //Thread::create([](void*){ for(;;) ; },STACK_MIN,1); //HACK
     MLX90640_I2CInit();
     
-//     unsigned short controlReg;
-//     auto a = MLX90640_I2CRead(MLX90640_address, 0x800D, 1, &controlReg);
-//     iprintf("%d %d\n",a,controlReg);
-//     a = MLX90640_I2CRead(MLX90640_address, 0x800D, 1, &controlReg);
-//     iprintf("%d %d\n",a,controlReg);
+//     for(;;)
+//     {
+//         unsigned short controlReg;
+//         auto a = MLX90640_I2CRead(MLX90640_address, 0x800D, 1, &controlReg);
+//         iprintf("x %d %d\n",a,controlReg);
+//         a = MLX90640_I2CRead(MLX90640_address+1, 0x800D, 1, &controlReg); //Wrong address
+//         iprintf("y %d %d\n",a,controlReg);
+//         //a = MLX90640_I2CRead(MLX90640_address, 0x800D, 0, &controlReg); //FIXME REMOVE
+//         //iprintf("z %d %d\n",a,controlReg);
+//         Thread::sleep(10);
+//         if(on_btn::value()==1) break;
+//     }
 //     
 //     return;
     

@@ -15,12 +15,10 @@ using namespace miosix;
 //#define I2C_SOFTWARE
 
 #ifdef I2C_SOFTWARE
-using sda = sen_sda;
-using scl = sen_scl;
-using i2c = SoftwareI2C<sda, scl, 50, true>;
+using i2c = SoftwareI2C<sen_sda, sen_scl, 50, true>;
 #define TRY_SEND(x) { if(i2c::send(x) == false) { i2c::sendStop(); return -1; } }
 #else
-I2C1Driver *i2c=nullptr;
+I2C1Master *i2c=nullptr;
 #endif
 
 void MLX90640_I2CInit()
@@ -28,11 +26,7 @@ void MLX90640_I2CInit()
     #ifdef I2C_SOFTWARE
     i2c::init();
     #else
-    sen_scl::alternateFunction(4);
-    sen_scl::mode(Mode::ALTERNATE_OD);
-    sen_sda::alternateFunction(4);
-    sen_sda::mode(Mode::ALTERNATE_OD);
-    i2c=&I2C1Driver::instance();
+    i2c=new I2C1Master(sen_sda::getPin(), sen_scl::getPin(), 400);
     #endif
 }
 
@@ -41,7 +35,6 @@ void MLX90640_I2CInit()
 int MLX90640_I2CRead(uint8_t slaveAddr, unsigned int startAddress, unsigned int nWordsRead, uint16_t *data)
 {
     if(nWordsRead == 0) return 0;
-    
     #ifdef I2C_SOFTWARE
     i2c::sendStart();
     TRY_SEND((slaveAddr << 1) | 0);
@@ -92,7 +85,6 @@ int MLX90640_I2CWrite(uint8_t slaveAddr, unsigned int writeAddress, uint16_t dat
     buffer[3] = data & 0xff;
     if(i2c->send(slaveAddr << 1, &buffer, 4) == false) return -1;
     #endif
-    
     uint16_t dataCheck;
     MLX90640_I2CRead(slaveAddr, writeAddress, 1, &dataCheck);
     if(dataCheck != data)

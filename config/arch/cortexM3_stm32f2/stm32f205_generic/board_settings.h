@@ -53,8 +53,6 @@ const bool defaultSerialFlowctrl=false;
 //#define SERIAL_2_DMA
 //#define SERIAL_3_DMA
 
-#define I2C_WITH_DMA
-
 ///\def STDOUT_REDIRECTED_TO_DCC
 ///If defined, stdout is redirected to the debug communication channel, and
 ///will be printed if OpenOCD is connected. If not defined, stdout will be
