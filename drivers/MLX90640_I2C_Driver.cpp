@@ -55,11 +55,8 @@ int MLX90640_I2CRead(uint8_t slaveAddr, unsigned int startAddress, unsigned int 
     *data++ = result;
     i2c::sendStop();
     #else
-    unsigned char buffer[2];
-    buffer[0] = startAddress >> 8;
-    buffer[1] = startAddress & 0xff;
-    if(i2c->send(slaveAddr << 1, &buffer, 2, false)  == false) return -1;
-    if(i2c->recv(slaveAddr << 1, data, 2*nWordsRead) == false) return -1;
+    unsigned short tx=toBigEndian16(startAddress);
+    if(i2c->sendRecv(slaveAddr<<1,&tx,2,data,2*nWordsRead)==false) return -1;
     for(unsigned int i=0;i<nWordsRead;i++) data[i]=fromBigEndian16(data[i]);
     #endif
     return 0;
@@ -78,12 +75,10 @@ int MLX90640_I2CWrite(uint8_t slaveAddr, unsigned int writeAddress, uint16_t dat
     TRY_SEND(data & 0xff);
     i2c::sendStop();
     #else
-    unsigned char buffer[4];
-    buffer[0] = writeAddress >> 8;
-    buffer[1] = writeAddress & 0xff;
-    buffer[2] = data >> 8;
-    buffer[3] = data & 0xff;
-    if(i2c->send(slaveAddr << 1, &buffer, 4) == false) return -1;
+    unsigned short tx[2];
+    tx[0]=toBigEndian16(writeAddress);
+    tx[1]=toBigEndian16(data);
+    if(i2c->send(slaveAddr<<1,&tx,4)==false) return -1;
     #endif
     uint16_t dataCheck;
     MLX90640_I2CRead(slaveAddr, writeAddress, 1, &dataCheck);
