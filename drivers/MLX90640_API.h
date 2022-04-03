@@ -51,9 +51,9 @@
     int MLX90640_GetFrameData(uint8_t slaveAddr, uint16_t *frameData);
     int MLX90640_ExtractParameters(const uint16_t *eeData, paramsMLX90640 *mlx90640);
     float MLX90640_GetVdd(const uint16_t *frameData, const paramsMLX90640 *params);
-    float MLX90640_GetTa(const uint16_t *frameData, const paramsMLX90640 *params);
+    float MLX90640_GetTa(const uint16_t *frameData, const paramsMLX90640 *params, float vdd);
     void MLX90640_GetImage(const uint16_t *frameData, const paramsMLX90640 *params, float *result);
-    void MLX90640_CalculateTo(const uint16_t *frameData, const paramsMLX90640 *params, float emissivity, float tr, float *result);
+    void MLX90640_CalculateTo(const uint16_t *frameData, const paramsMLX90640 *params, float emissivity, float vdd, float ta, float tr, float *result);
     int MLX90640_SetResolution(uint8_t slaveAddr, uint8_t resolution);
     int MLX90640_GetCurResolution(uint8_t slaveAddr);
     int MLX90640_SetRefreshRate(uint8_t slaveAddr, uint8_t refreshRate);   
