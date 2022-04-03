@@ -43,8 +43,17 @@ MainDisplayFrame::MainDisplayFrame(MLX90640Frame *processedFrame)
     float range=max(minRange,maxVal-minVal);
     
     for(int y=0;y<(2*ny)-1;y++)
+    {
         for(int x=0;x<(2*nx)-1;x++)
-            irImage[x][y]=interpolate2d(processedFrame,x,y,minVal,range);
+        {
+            Color c=interpolate2d(processedFrame,x,y,minVal,range);
+            //Image layout in memory is reversed
+            irImage[2*y  ][2*x  ]=c;
+            irImage[2*y+1][2*x  ]=c;
+            irImage[2*y  ][2*x+1]=c;
+            irImage[2*y+1][2*x+1]=c;
+        }
+    }
     
     caption=to_string(static_cast<int>(minVal + .5f)) + " "
            +to_string(static_cast<int>(maxVal + .5f)) + "      ";
@@ -76,20 +85,15 @@ Color MainDisplayFrame::interpolate2d(MLX90640Frame *processedFrame, int x, int 
 void MainDisplayFrame::draw(Display& display)
 {
     auto t1 = getTime();
-    int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
     const int pixSize=2; // image becomes 2*63 x 2*47 or 126 x 94 pixels
     DrawingContext dc(display);
-    for(int y=0;y<(2*ny)-1;y++)
-        for(int x=0;x<(2*nx)-1;x++)
-            dc.clear(Point(x*pixSize,y*pixSize),
-                     Point(((x+1)*pixSize)-1,((y+1)*pixSize)-1),
-                     irImage[x][y]);
+    Image img(94,126,irImage);
+    dc.drawImage(Point(0,0),img);
     dc.setFont(droid21);
-    dc.write(Point(0,2*ny*pixSize),caption.c_str());
+    dc.write(Point(0,2*MLX90640Frame::ny*pixSize),caption.c_str());
     auto t2 = getTime();
     iprintf("draw = %lld\n",t2-t1);
 }
-
 
 //
 // class Application
@@ -100,7 +104,7 @@ Application::Application(Display& display)
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),400)),
       sensor(make_unique<MLX90640>(i2c.get()))
 {
-    sensor->setRefresh(MLX90640Refresh::R4);
+    sensor->setRefresh(MLX90640Refresh::R8);
 }
 
 void Application::run()
@@ -129,6 +133,8 @@ void Application::run()
         //read = 826804835 process =  75025464 draw = 87711063 1Hz with float
         //read =  64109598 process =  75087397 draw = 87643263 4Hz with float
         //read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz with float
+        //read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Kz with float
+        //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
         iprintf("read = %lld process = %lld render = %lld\n",t2-t1,t3-t2,t4-t3);
         
         if(on_btn::value()==1) break;

@@ -27,7 +27,7 @@ public:
     void draw(mxgui::Display & display) override;
     
 private:
-    mxgui::Color irImage[126][94];
+    mxgui::Color irImage[94][126];
     std::string caption; //TODO
 };
 
