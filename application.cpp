@@ -129,11 +129,13 @@ void Application::run()
         
         auto t4 = getTime();
         
-        //read = 785745170 process = 114363196 draw = 87720263 1Hz with double
-        //read = 826804835 process =  75025464 draw = 87711063 1Hz with float
-        //read =  64109598 process =  75087397 draw = 87643263 4Hz with float
-        //read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz with float
-        //read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Kz with float
+        //read = 785745170 process = 114363196 draw = 87720263 1Hz double
+        //read = 826804835 process =  75025464 draw = 87711063 1Hz float
+        //read =  64109598 process =  75087397 draw = 87643263 4Hz float
+        //read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz float
+        //read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Hz float
+        //read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
+
         //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
         iprintf("read = %lld process = %lld render = %lld\n",t2-t1,t3-t2,t4-t3);
         
@@ -164,6 +166,7 @@ void Application::measureThread()
 
 void Application::displayThread()
 {
+    Thread::getCurrentThread()->setPriority(2);
     while(!quit)
     {
         DisplayFrame *frame=nullptr;
