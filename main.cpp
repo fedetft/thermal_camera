@@ -1,10 +1,11 @@
 
-#include <miosix.h>
-#include <drivers/hwmapping.h>
+#include <cstdio>
+#include <drivers/misc.h>
 #include <application.h>
+#include <mxgui/display.h>
+#include <images/miosixlogo.h>
 
 using namespace std;
-using namespace miosix;
 using namespace mxgui;
 
 namespace mxgui {
@@ -14,23 +15,36 @@ void registerDisplayHook(DisplayManager& dm)
 }
 } //namespace mxgui
 
+
+void bootMessage(Display& display)
+{
+    const char s0[]="Miosix";
+    const char s1[]="Thermal camera";
+    const int s0pix=miosixlogo.getWidth()+1+droid21.calculateLength(s0);
+    const int s1pix=tahoma.calculateLength(s1);
+    DrawingContext dc(display);
+    dc.setFont(droid21);
+    int width=dc.getWidth();
+    int y=10;
+    dc.drawImage(Point((width-s0pix)/2,y),miosixlogo);
+    dc.write(Point((width-s0pix)/2+miosixlogo.getWidth()+1,y),s0);
+    y+=dc.getFont().getHeight();
+    dc.line(Point((width-s1pix)/2,y),Point((width-s1pix)/2+s1pix,y),white);
+    y+=4;
+    dc.setFont(tahoma);
+    dc.write(Point((width-s1pix)/2,y),s1);
+}
+
 int main()
 {
-    keep_on::mode(Mode::OUTPUT);
-    keep_on::high();
-    on_btn::mode(Mode::INPUT_PULL_DOWN);
-    up_btn::mode(Mode::INPUT_PULL_UP);
-    
+    initializeBoard();
     auto& display=DisplayManager::instance().getDisplay();
+    bootMessage(display);
+    waitPowerButtonReleased();
     {
         DrawingContext dc(display);
-        dc.setFont(tahoma);
-        dc.write(Point(0, 0),"Miosix thermal camera");
-        dc.write(Point(0,15),"experimental firmware");
+        dc.clear(black);
     }
-    
-    while(on_btn::value()==1) Thread::sleep(100);
-    Thread::sleep(200);
     
     try {
         Application app(display);
@@ -40,6 +54,5 @@ int main()
     }
     
     display.turnOff();
-    keep_on::low();
-    for(;;) Thread::sleep(1);
+    shutdownBoard();
 }

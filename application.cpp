@@ -1,8 +1,14 @@
 
 #include <application.h>
 #include <drivers/hwmapping.h>
+#include <drivers/misc.h>
 #include <colormap.h>
 #include <thread>
+#include <images/batt100.h>
+#include <images/batt75.h>
+#include <images/batt50.h>
+#include <images/batt25.h>
+#include <images/batt0.h>
 
 using namespace std;
 using namespace miosix;
@@ -85,12 +91,22 @@ Color MainDisplayFrame::interpolate2d(MLX90640Frame *processedFrame, int x, int 
 void MainDisplayFrame::draw(Display& display)
 {
     auto t1 = getTime();
+    const int infoBarHeight=batt0.getHeight();
     const int pixSize=2; // image becomes 2*63 x 2*47 or 126 x 94 pixels
     DrawingContext dc(display);
     Image img(94,126,irImage);
-    dc.drawImage(Point(0,0),img);
+    dc.drawImage(Point(0,infoBarHeight),img);
     dc.setFont(droid21);
-    dc.write(Point(0,2*MLX90640Frame::ny*pixSize),caption.c_str());
+    dc.write(Point(0,infoBarHeight+2*MLX90640Frame::ny*pixSize),caption.c_str());
+    Point batteryIconPoint(display.getWidth()-batt0.getWidth(),0);
+    switch(batteryLevel(getBatteryVoltage()))
+    {
+        case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100); break;
+        case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75); break;
+        case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50); break;
+        case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25); break;
+        case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0); break;
+    }
     auto t2 = getTime();
     iprintf("draw = %lld\n",t2-t1);
 }

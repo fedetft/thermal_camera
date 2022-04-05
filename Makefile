@@ -18,7 +18,7 @@ SUBDIRS := $(KPATH) mxgui
 ##
 SRC :=                                  \
 main.cpp application.cpp colormap.cpp   \
-drivers/display_er_oledm015.cpp         \
+drivers/display_er_oledm015.cpp drivers/misc.cpp        \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp drivers/MLX90640_I2C_Driver.cpp
 
 IMG :=  \
@@ -26,7 +26,8 @@ images/batt0.png \
 images/batt25.png \
 images/batt50.png \
 images/batt75.png \
-images/batt100.png
+images/batt100.png \
+images/miosixlogo.png
 
 SRC2 := $(IMG:.png=.cpp)
 # Images should be compiled first to prevent missing includes
