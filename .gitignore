@@ -4,4 +4,6 @@ main.bin
 main.hex
 main.elf
 main.map
+images/*.h
+images/*.cpp
 

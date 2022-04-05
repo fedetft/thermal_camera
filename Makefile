@@ -21,6 +21,22 @@ main.cpp application.cpp colormap.cpp   \
 drivers/display_er_oledm015.cpp         \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp drivers/MLX90640_I2C_Driver.cpp
 
+IMG :=  \
+images/batt0.png \
+images/batt25.png \
+images/batt50.png \
+images/batt75.png \
+images/batt100.png
+
+SRC2 := $(IMG:.png=.cpp)
+# Images should be compiled first to prevent missing includes
+SRC := $(SRC2) $(SRC)
+%.cpp : %.png
+	./mxgui/_tools/code_generators/build/pngconverter --in $< --depth 16
+
+# This prevents make from deleting the intermediate .cpp files
+.PRECIOUS: $(SRC2)
+
 ##
 ## List here additional static libraries with relative path
 ##
