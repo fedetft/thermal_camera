@@ -2,33 +2,32 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <miosix.h>
 #include <mxgui/display.h>
 #include <mxgui/misc_inst.h>
 #include <drivers/stm32f2_f4_i2c.h>
-#include <drivers/display_er_oledm015.h>
 #include <drivers/mlx90640.h>
 
-class DisplayFrame
+class ThermalImageRenderer
 {
 public:
-    virtual void draw(mxgui::Display& display)=0;
-    virtual ~DisplayFrame();
-};
-
-class MainDisplayFrame : public DisplayFrame
-{
-public:
-    MainDisplayFrame(MLX90640Frame *processedFrame);
     
-    mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r);
+    void render(MLX90640Frame *processedFrame);
     
-    void draw(mxgui::Display & display) override;
+    void draw(mxgui::DrawingContext& dc, mxgui::Point p);
+    
+    float minTemperature() const { return minTemp; }
+    
+    float maxTemperature() const { return maxTemp; }
     
 private:
+    static mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r);
+    
+    static mxgui::Color pixMap(float t, float m, float r);
+    
     mxgui::Color irImage[94][126];
-    std::string caption; //TODO
+    float minTemp, maxTemp;
+    const float minRange=15.f;
 };
 
 class Application
@@ -40,14 +39,17 @@ public:
     void run();
     
 private:
-    void measureThread();
+    Application(const Application&)=delete;
+    Application& operator=(const Application&)=delete;
     
-    void displayThread();
+    void sensorThread();
+    
+    void processThread();
     
     mxgui::Display& display;
     std::unique_ptr<miosix::I2C1Master> i2c;
     std::unique_ptr<MLX90640> sensor;
-    miosix::Queue<MLX90640RawFrame*, 2> rawFrameQueue;
-    miosix::Queue<DisplayFrame*, 1> displayQueue;
+    miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
+    miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
     bool quit=false;
 };

@@ -4,6 +4,7 @@
 #include <application.h>
 #include <mxgui/display.h>
 #include <images/miosixlogo.h>
+#include <drivers/display_er_oledm015.h>
 
 using namespace std;
 using namespace mxgui;

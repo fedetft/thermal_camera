@@ -20,95 +20,76 @@ using namespace mxgui;
  * I2C1 speed (sensor)  400kHz
  */
 
-Color pixMap(float t, float m, float r)
+//read = 785745170 process = 114363196 draw = 87720263 1Hz double
+//read = 826804835 process =  75025464 draw = 87711063 1Hz float
+//read =  64109598 process =  75087397 draw = 87643263 4Hz float
+//read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz float
+//read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Hz float
+//read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
+//process = 76482397 render = 12227133 draw = 13807066 8Hz float DMA
+//NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
+
+//
+// class ThermalImageRenderer
+//
+
+void ThermalImageRenderer::render(MLX90640Frame *processedFrame)
 {
-    int pixel = 255.5f * ((t - m) / r);
-    return colormap[max(0, min(255, pixel))];
-}
-
-//
-// class DisplayFrame
-//
-
-DisplayFrame::~DisplayFrame() {}
-
-//
-// class MainDisplayFrame
-//
-
-MainDisplayFrame::MainDisplayFrame(MLX90640Frame *processedFrame)
-{
-    int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
-    const float minRange=15.f;
-    float minVal=processedFrame->temperature[0], maxVal=processedFrame->temperature[0];
+    const int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
+    minTemp=processedFrame->temperature[0];
+    maxTemp=processedFrame->temperature[0];
     for(int i=0;i<nx*ny;i++)
     {
-        minVal=min(minVal,processedFrame->temperature[i]);
-        maxVal=max(maxVal,processedFrame->temperature[i]);
+        minTemp=min(minTemp,processedFrame->temperature[i]);
+        maxTemp=max(maxTemp,processedFrame->temperature[i]);
     }
-    float range=max(minRange,maxVal-minVal);
-    
+    float range=max(minRange,maxTemp-minTemp);
     for(int y=0;y<(2*ny)-1;y++)
     {
         for(int x=0;x<(2*nx)-1;x++)
         {
-            Color c=interpolate2d(processedFrame,x,y,minVal,range);
-            //Image layout in memory is reversed
-            irImage[2*y  ][2*x  ]=c;
+            Color c=interpolate2d(processedFrame,x,y,minTemp,range);
+            irImage[2*y  ][2*x  ]=c; //Image layout in memory is reversed
             irImage[2*y+1][2*x  ]=c;
             irImage[2*y  ][2*x+1]=c;
             irImage[2*y+1][2*x+1]=c;
         }
     }
-    
-    caption=to_string(static_cast<int>(minVal + .5f)) + " "
-           +to_string(static_cast<int>(maxVal + .5f)) + "      ";
 }
 
-Color MainDisplayFrame::interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r)
+void ThermalImageRenderer::draw(DrawingContext& dc, Point p)
 {
-    if((x & 1) == 0 && (y & 1) == 0)
-        return pixMap(processedFrame->getTempAt(x / 2, y / 2), m, r);
+    Image img(94,126,irImage);
+    dc.drawImage(p,img);
+}
 
-    if((x & 1) == 0) //1d interp along y axis
+Color ThermalImageRenderer::interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r)
+{
+    if((x & 1)==0 && (y & 1)==0)
+        return pixMap(processedFrame->getTempAt(x/2,y/2),m,r);
+
+    if((x & 1)==0) //1d interp along y axis
     {
-        float t = processedFrame->getTempAt(x / 2, y / 2) + processedFrame->getTempAt(x / 2, (y / 2) + 1);
-        return pixMap(t / 2.f, m, r);
+        float t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt(x/2,(y/2)+1);
+        return pixMap(t/2.f,m,r);
     }
     
-    if((y & 1) == 0) //1d interp along x axis
+    if((y & 1)==0) //1d interp along x axis
     {
-        float t = processedFrame->getTempAt(x / 2, y / 2) + processedFrame->getTempAt((x / 2) + 1, y / 2);
-        return pixMap(t / 2.f, m, r);
+        float t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt((x/2)+1,y/2);
+        return pixMap(t/2.f,m,r);
     }
     
     //2d interpolation
-    float t = processedFrame->getTempAt(x / 2, y / 2)       + processedFrame->getTempAt((x / 2) + 1, y / 2)
-            + processedFrame->getTempAt(x / 2, (y / 2) + 1) + processedFrame->getTempAt((x / 2) + 1, (y / 2) + 1);
-    return pixMap(t / 4.f, m, r);
+    float t=processedFrame->getTempAt(x/2,y/2)    +processedFrame->getTempAt((x/2)+1,y/2)
+           +processedFrame->getTempAt(x/2,(y/2)+1)+processedFrame->getTempAt((x/2)+1,(y/2)+1);
+    return pixMap(t/4.f,m,r);
 }
 
-void MainDisplayFrame::draw(Display& display)
+Color ThermalImageRenderer::pixMap(float t, float m, float r)
 {
-    auto t1 = getTime();
-    const int infoBarHeight=batt0.getHeight();
-    const int pixSize=2; // image becomes 2*63 x 2*47 or 126 x 94 pixels
-    DrawingContext dc(display);
-    Image img(94,126,irImage);
-    dc.drawImage(Point(0,infoBarHeight),img);
-    dc.setFont(droid21);
-    dc.write(Point(0,infoBarHeight+2*MLX90640Frame::ny*pixSize),caption.c_str());
-    Point batteryIconPoint(display.getWidth()-batt0.getWidth(),0);
-    switch(batteryLevel(getBatteryVoltage()))
-    {
-        case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100); break;
-        case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75); break;
-        case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50); break;
-        case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25); break;
-        case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0); break;
-    }
-    auto t2 = getTime();
-    iprintf("draw = %lld\n",t2-t1);
+    int pixel=255.5f*((t-m)/r);
+    return colormap[max(0,min(255,pixel))];
 }
 
 //
@@ -125,70 +106,86 @@ Application::Application(Display& display)
 
 void Application::run()
 {
-    thread mt(&Application::measureThread,this);
-    thread dt(&Application::displayThread,this);
-    auto processedFrame=make_unique<MLX90640Frame>();
+    thread st(&Application::sensorThread,this);
+    thread pt(&Application::processThread,this);
+    
+    auto renderer=make_unique<ThermalImageRenderer>();
     for(;;)
     {
+        MLX90640Frame *processedFrame=nullptr;
+        processedFrameQueue.get(processedFrame);
         auto t1 = getTime();
-        
-        MLX90640RawFrame *rawFrame=nullptr;
-        rawFrameQueue.get(rawFrame);
-        
+        renderer->render(processedFrame);
         auto t2 = getTime();
-        sensor->processFrame(*rawFrame,*processedFrame.get());
-        delete rawFrame;
-        
+        delete processedFrame;
+        {
+            DrawingContext dc(display);
+            const int infoBarY=0, thermalImageY=12, tempDataY=108;
+            
+            Point batteryIconPoint(display.getWidth()-batt0.getWidth(),infoBarY);
+            switch(batteryLevel(getBatteryVoltage()))
+            {
+                case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100); break;
+                case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75); break;
+                case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50); break;
+                case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25); break;
+                case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0); break;
+            }
+            
+            renderer->draw(dc,Point(1,thermalImageY));
+            
+            string caption=to_string(static_cast<int>(renderer->minTemperature()+.5f)) + " "
+                          +to_string(static_cast<int>(renderer->maxTemperature()+.5f)) + "      ";
+            dc.setFont(droid21);
+            Point tempDataTop(0,tempDataY);
+            Point tallTextTempDataBottom(127,tempDataY+15);
+            dc.clippedWrite(tempDataTop,tempDataTop,tallTextTempDataBottom,caption.c_str());
+            
+        }
         auto t3 = getTime();
         
-        displayQueue.put(new MainDisplayFrame(processedFrame.get()));
-        
-        auto t4 = getTime();
-        
-        //read = 785745170 process = 114363196 draw = 87720263 1Hz double
-        //read = 826804835 process =  75025464 draw = 87711063 1Hz float
-        //read =  64109598 process =  75087397 draw = 87643263 4Hz float
-        //read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz float
-        //read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Hz float
-        //read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
-
-        //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
-        iprintf("read = %lld process = %lld render = %lld\n",t2-t1,t3-t2,t4-t3);
-        
+        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
         if(on_btn::value()==1) break;
     }
     
     quit=true;
-    if(displayQueue.isEmpty()) displayQueue.put(nullptr);
-    mt.join();
-    dt.join();
+    if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevent deadlock
+    st.join();
+    pt.join();
 }
 
-void Application::measureThread()
+void Application::sensorThread()
 {
-    Thread::getCurrentThread()->setPriority(2);
+    //High priority for sensor read, prevents I2C reads from starving
+    Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
     while(!quit)
     {
-        MLX90640RawFrame *rawFrame=new MLX90640RawFrame;
+        auto *rawFrame=new MLX90640RawFrame;
         sensor->readFrame(*rawFrame);
         bool success;
         {
             FastInterruptDisableLock dLock;
             success=rawFrameQueue.IRQput(rawFrame); //Nonblocking put
         }
-        if(success==false) delete rawFrame;
+        if(success==false) delete rawFrame; //Drop frame without leaking memory
     }
 }
 
-void Application::displayThread()
+void Application::processThread()
 {
-    Thread::getCurrentThread()->setPriority(2);
+    //Low priority for processing, prevents display writes from starving
+    Thread::getCurrentThread()->setPriority(MAIN_PRIORITY-1);
     while(!quit)
     {
-        DisplayFrame *frame=nullptr;
-        displayQueue.get(frame);
-        if(frame==nullptr) continue;
-        frame->draw(display);
-        delete frame;
+        MLX90640RawFrame *rawFrame=nullptr;
+        rawFrameQueue.get(rawFrame);
+        if(rawFrame==nullptr) continue; //Happens on shutdown
+        auto t1=getTime();
+        auto *processedFrame=new MLX90640Frame;
+        sensor->processFrame(*rawFrame,*processedFrame);
+        delete rawFrame;
+        processedFrameQueue.put(processedFrame);
+        auto t2=getTime();
+        iprintf("process = %lld\n",t2-t1);
     }
 }
