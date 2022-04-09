@@ -32,6 +32,7 @@ using namespace mxgui;
 //read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
 //process = 76482397 render = 12227133 draw = 13807066 8Hz float DMA
 //process = 75880497 render = 12312733 draw = 16298632 8Hz float DMA UI
+//process = 77364697 render =  2053867 draw = 16339532 8Hz short DMA UI
 
 //
 // class ThermalImageRenderer
@@ -48,7 +49,7 @@ void ThermalImageRenderer::render(MLX90640Frame *processedFrame)
         minTemp=min(minTemp,processedFrame->temperature[i]);
         maxTemp=max(maxTemp,processedFrame->temperature[i]);
     }
-    float range=max(minRange,maxTemp-minTemp);
+    short range=max<short>(minRange,maxTemp-minTemp);
     for(int y=0;y<(2*ny)-1;y++)
     {
         for(int x=0;x<(2*nx)-1;x++)
@@ -83,32 +84,32 @@ void ThermalImageRenderer::legend(mxgui::Color *legend, int legendSize)
     for(int i=0;i<legendSize;i++) legend[i]=colormap[colormapRange*i/(legendSize-1)];
 }
 
-Color ThermalImageRenderer::interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r)
+Color ThermalImageRenderer::interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r)
 {
     if((x & 1)==0 && (y & 1)==0)
         return pixMap(processedFrame->getTempAt(x/2,y/2),m,r);
 
     if((x & 1)==0) //1d interp along y axis
     {
-        float t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt(x/2,(y/2)+1);
-        return pixMap(t/2.f,m,r);
+        short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt(x/2,(y/2)+1);
+        return pixMap(roundedDiv(t,2),m,r);
     }
     
     if((y & 1)==0) //1d interp along x axis
     {
-        float t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt((x/2)+1,y/2);
-        return pixMap(t/2.f,m,r);
+        short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt((x/2)+1,y/2);
+        return pixMap(roundedDiv(t,2),m,r);
     }
     
     //2d interpolation
-    float t=processedFrame->getTempAt(x/2,y/2)    +processedFrame->getTempAt((x/2)+1,y/2)
+    short t=processedFrame->getTempAt(x/2,y/2)    +processedFrame->getTempAt((x/2)+1,y/2)
            +processedFrame->getTempAt(x/2,(y/2)+1)+processedFrame->getTempAt((x/2)+1,(y/2)+1);
-    return pixMap(t/4.f,m,r);
+    return pixMap(roundedDiv(t,4),m,r);
 }
 
-Color ThermalImageRenderer::pixMap(float t, float m, float r)
+Color ThermalImageRenderer::pixMap(short t, short m, short r)
 {
-    int pixel=255.5f*((t-m)/r);
+    int pixel=(255*(t-m))/r;
     return colormap[max(0,min(255,pixel))];
 }
 
@@ -226,11 +227,10 @@ void Application::drawStaticPartOfMainFrame()
 }
 
 void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
-                             Font f, float temperature)
+                             Font f, short temperature)
 {
-    int t=temperature>0.f ? min(999.f,temperature+0.5f) : max(-99.f,temperature-0.5f);
     char line[8];
-    sniprintf(line,sizeof(line),"%3d",t);
+    sniprintf(line,sizeof(line),"%3d",temperature);
     int len=f.calculateLength(line);
     int toBlank=b.x()-a.x()-len;
     if(toBlank>0)

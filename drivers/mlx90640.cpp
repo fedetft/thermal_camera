@@ -57,7 +57,7 @@ void MLX90640::processFrame(const MLX90640RawFrame& rawFrame, MLX90640Frame& fra
         float vdd=MLX90640_GetVdd(rawFrame.subframe[i],&params);
         float Ta=MLX90640_GetTa(rawFrame.subframe[i],&params,vdd);
         float Tr=Ta-taShift; //Reflected temperature based on the sensor ambient temperature
-        MLX90640_CalculateTo(rawFrame.subframe[i],&params,emissivity,vdd,Ta,Tr,frame.temperature);
+        MLX90640_CalculateToShort(rawFrame.subframe[i],&params,emissivity,vdd,Ta,Tr,frame.temperature);
     }
 }
 

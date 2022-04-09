@@ -15,9 +15,9 @@ class MLX90640Frame
 {
 public:
     static const int nx=32, ny=24;
-    float temperature[nx*ny]; // Heavy object! 3 KByte
+    short temperature[nx*ny]; // Heavy object! 1.5 KByte
     
-    float getTempAt(int x, int y) { return temperature[(nx-1-x)+y*nx]; }
+    short getTempAt(int x, int y) { return temperature[(nx-1-x)+y*nx]; }
 };
 
 enum class MLX90640Refresh : unsigned short

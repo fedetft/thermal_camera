@@ -18,24 +18,30 @@ public:
     
     void legend(mxgui::Color *legend, int legendSize);
     
-    float minTemperature() const { return minTemp; }
+    short minTemperature() const { return minTemp; }
     
-    float maxTemperature() const { return maxTemp; }
+    short maxTemperature() const { return maxTemp; }
     
-    float crosshairTemperature() const { return crosshairTemp; }
+    short crosshairTemperature() const { return crosshairTemp; }
     
 private:
-    static mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, float m, float r);
+    static mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r);
     
-    static mxgui::Color pixMap(float t, float m, float r);
+    static mxgui::Color pixMap(short t, short m, short r);
     
     void crosshairPixel(int x, int y);
     
     static int colorBrightness(mxgui::Color c);
     
+    static inline short roundedDiv(short a, short b)
+    {
+        if(a>0) return (a+b/2)/b;
+        return (a-b/2)/b;
+    }
+    
     mxgui::Color irImage[94][126];
-    float minTemp, maxTemp, crosshairTemp;
-    const float minRange=15.f;
+    short minTemp, maxTemp, crosshairTemp;
+    const short minRange=15.f;
 };
 
 class Application
@@ -55,7 +61,7 @@ private:
     void drawStaticPartOfMainFrame();
     
     void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,
-                         mxgui::Font f, float temperature);
+                         mxgui::Font f, short temperature);
     
     void sensorThread();
     
