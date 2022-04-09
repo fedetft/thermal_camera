@@ -32,6 +32,8 @@ enum class MLX90640Refresh : unsigned short
     R32  = 0b111  ///< 64 Half frames every second,   so 32 frames/sec
 };
 
+MLX90640Refresh refreshFromInt(int rate);
+
 class MLX90640
 {
 public:

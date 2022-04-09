@@ -8,6 +8,17 @@
 using namespace std;
 using namespace miosix;
 
+MLX90640Refresh refreshFromInt(int rate)
+{
+    if(rate>=32) return MLX90640Refresh::R32;
+    if(rate>=16) return MLX90640Refresh::R16;
+    if(rate>=8) return MLX90640Refresh::R8;
+    if(rate>=4) return MLX90640Refresh::R4;
+    if(rate>=2) return MLX90640Refresh::R2;
+    return MLX90640Refresh::R1;
+    //NOTE: discard lower refresh rates
+}
+
 MLX90640::MLX90640(I2C1Master *i2c, unsigned char devAddr)
     : i2c(i2c), devAddr(devAddr<<1) //Make room for r/w bit
 {
