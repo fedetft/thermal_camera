@@ -250,7 +250,7 @@ static inline void imageWindow(Point p1, Point p2)
 
 namespace mxgui {
 
-DisplayErOledm015::DisplayErOledm015() : buffer(nullptr)
+DisplayErOledm015::DisplayErOledm015() : buffer(nullptr), buffer2(nullptr)
 {
     {
         FastInterruptDisableLock dLock;
@@ -394,16 +394,22 @@ void DisplayErOledm015::line(Point a, Point b, Color color)
 
 void DisplayErOledm015::scanLine(Point p, const Color *colors, unsigned short length)
 {
-    imageWindow(p,Point(width-1,p.y()));
-    doBeginPixelWrite();
-    for(int i=0;i<length;i++) doWritePixel(colors[i]);
-    doEndPixelWrite();
+    if(buffer2==nullptr) buffer2=new Color[buffer2Size];
+    length=min<unsigned short>(length,width-p.x());
+    imageWindow(p,Point(length-1,p.y()));
+    cmd(0x5c);
+    dc::high();
+    cs::low();
+    for(int i=0;i<length;i++) buffer2[i]=toBigEndian16(colors[i]);
+    spi1SendDMA(buffer2,length);
+    cs::high();
+    delayUs(1);
 }
 
 Color *DisplayErOledm015::getScanLineBuffer()
 {
     //getWidth() would be enough as size, but we reuse the buffer for DMA
-    if(buffer==nullptr) buffer=new Color[bufferSize];
+    if(buffer==nullptr) buffer=new Color[getWidth()];
     return buffer;
 }
 
@@ -417,7 +423,7 @@ void DisplayErOledm015::drawImage(Point p, const ImageBase& img)
     const Color *imgData=img.getData();
     if(imgData!=0)
     {
-        if(buffer==nullptr) buffer=new Color[bufferSize];
+        if(buffer2==nullptr) buffer2=new Color[buffer2Size];
         short int xEnd=p.x()+img.getWidth()-1;
         short int yEnd=p.y()+img.getHeight()-1;
         imageWindow(p,Point(xEnd,yEnd));
@@ -431,9 +437,9 @@ void DisplayErOledm015::drawImage(Point p, const ImageBase& img)
         int imgSize=img.getHeight()*img.getWidth();
         while(imgSize>0)
         {
-            int chunkSize=min(imgSize,bufferSize);
-            for(int i=0;i<chunkSize;i++) buffer[i]=toBigEndian16(imgData[i]);
-            spi1SendDMA(buffer,chunkSize);
+            int chunkSize=min(imgSize,buffer2Size);
+            for(int i=0;i<chunkSize;i++) buffer2[i]=toBigEndian16(imgData[i]);
+            spi1SendDMA(buffer2,chunkSize);
             imgSize-=chunkSize;
             imgData+=chunkSize;
         }

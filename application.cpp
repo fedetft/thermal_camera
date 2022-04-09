@@ -31,6 +31,7 @@ using namespace mxgui;
 //read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Hz float
 //read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
 //process = 76482397 render = 12227133 draw = 13807066 8Hz float DMA
+//process = 75880497 render = 12312733 draw = 16298632 8Hz float DMA UI
 
 //
 // class ThermalImageRenderer
@@ -175,7 +176,7 @@ void Application::run()
             drawTemperature(dc,Point(38,108),Point(70,122),droid21,renderer->crosshairTemperature());
             Color *buffer=dc.getScanLineBuffer();
             renderer->legend(buffer,dc.getWidth());
-            for(int y=124;y<=127;y++) dc.scanLine(Point(0,y),buffer,dc.getWidth());
+            for(int y=124;y<=127;y++) dc.scanLineBuffer(Point(0,y),dc.getWidth());
         }
         auto t3 = getTime();
         
