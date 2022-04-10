@@ -1,3 +1,29 @@
+/***************************************************************************
+ *   Copyright (C) 2022 by Terraneo Federico                               *
+ *                                                                         *
+ *   This program is free software; you can redistribute it and/or modify  *
+ *   it under the terms of the GNU General Public License as published by  *
+ *   the Free Software Foundation; either version 2 of the License, or     *
+ *   (at your option) any later version.                                   *
+ *                                                                         *
+ *   This program is distributed in the hope that it will be useful,       *
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
+ *   GNU General Public License for more details.                          *
+ *                                                                         *
+ *   As a special exception, if other files instantiate templates or use   *
+ *   macros or inline functions from this file, or you compile this file   *
+ *   and link it with other works to produce a work based on this file,    *
+ *   this file does not by itself cause the resulting work to be covered   *
+ *   by the GNU General Public License. However the source code for this   *
+ *   file must still be made available in accordance with the GNU General  *
+ *   Public License. This exception does not invalidate any other reasons  *
+ *   why a work based on this file might be covered by the GNU General     *
+ *   Public License.                                                       *
+ *                                                                         *
+ *   You should have received a copy of the GNU General Public License     *
+ *   along with this program; if not, see <http://www.gnu.org/licenses/>   *
+ ***************************************************************************/
 
 #include <application.h>
 #include <drivers/hwmapping.h>
@@ -138,8 +164,8 @@ Application::Application(Display& display)
       sensor(make_unique<MLX90640>(i2c.get()))
 {
     refresh=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
-    sensor->setRefresh(refreshFromInt(refresh));
-    emissivity=sensor->getEmissivity();
+    if(sensor->setRefresh(refreshFromInt(refresh))==false)
+        puts("Error setting framerate");
 }
 
 void Application::run()
@@ -150,7 +176,7 @@ void Application::run()
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
     
-    auto renderer=make_unique<ThermalImageRenderer>();
+    auto renderer=make_unique<ThermalImageRenderer>(); //Would overflow stack
     MLX90640Frame *processedFrame=nullptr;
     processedFrameQueue.get(processedFrame);
     delete processedFrame; //Drop first frame
@@ -236,7 +262,7 @@ void Application::drawStaticPartOfMainFrame()
 }
 
 void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
-                             Font f, short temperature)
+                                  Font f, short temperature)
 {
     char line[8];
     sniprintf(line,sizeof(line),"%3d",temperature);
@@ -258,13 +284,20 @@ void Application::sensorThread()
     while(!quit)
     {
         auto *rawFrame=new MLX90640RawFrame;
-        sensor->readFrame(*rawFrame);
         bool success;
+        do {
+            success=sensor->readFrame(rawFrame);
+            if(success==false) puts("Error reading frame");
+        } while(success==false);
         {
             FastInterruptDisableLock dLock;
             success=rawFrameQueue.IRQput(rawFrame); //Nonblocking put
         }
-        if(success==false) delete rawFrame; //Drop frame without leaking memory
+        if(success==false)
+        {
+            puts("Dropped frame");
+            delete rawFrame; //Drop frame without leaking memory
+        }
     }
 }
 
@@ -279,7 +312,7 @@ void Application::processThread()
         if(rawFrame==nullptr) continue; //Happens on shutdown
         auto t1=getTime();
         auto *processedFrame=new MLX90640Frame;
-        sensor->processFrame(*rawFrame,*processedFrame);
+        sensor->processFrame(rawFrame,processedFrame,emissivity);
         delete rawFrame;
         processedFrameQueue.put(processedFrame);
         auto t2=getTime();

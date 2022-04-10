@@ -14,6 +14,12 @@
  * limitations under the License.
  *
  */
+
+/*
+ * Modified by TFT: added MLX90640_CalculateToShort, some optimizations,
+ * made compatible with Miosix
+ */
+
 #ifndef _MLX640_API_H_
 #define _MLX640_API_H_
 

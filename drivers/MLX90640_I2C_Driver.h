@@ -14,14 +14,21 @@
    limitations under the License.
 
 */
+
+/*
+ * Modified by TFT: replaced by stubs as this API does not lend itself to
+ * a DMA implementation. Reading from the sensor has been replaced by an
+ * optimized driver in mlx90640.h
+ */
+
 #ifndef _MLX90640_I2C_Driver_H_
 #define _MLX90640_I2C_Driver_H_
 
 #include <stdint.h>
 
-void MLX90640_I2CInit(void);
-int MLX90640_I2CRead(uint8_t slaveAddr, unsigned int startAddress, unsigned int nWordsRead, uint16_t *data);
-int MLX90640_I2CWrite(uint8_t slaveAddr, unsigned int writeAddress, uint16_t data);
-void MLX90640_I2CFreqSet(int freq);
+inline void MLX90640_I2CInit(void) {}
+inline int MLX90640_I2CRead(uint8_t slaveAddr, unsigned int startAddress, unsigned int nWordsRead, uint16_t *data) {return -1; }
+inline int MLX90640_I2CWrite(uint8_t slaveAddr, unsigned int writeAddress, uint16_t data) { return -1; }
+inline void MLX90640_I2CFreqSet(int freq) {}
 
 #endif
