@@ -33,6 +33,7 @@ using namespace mxgui;
 //process = 76482397 render = 12227133 draw = 13807066 8Hz float DMA
 //process = 75880497 render = 12312733 draw = 16298632 8Hz float DMA UI
 //process = 77364697 render =  2053867 draw = 16339532 8Hz short DMA UI
+//process = 77418064 render =  2051966 draw = 16335033 8Hz scaled short DMA UI
 
 //
 // class ThermalImageRenderer
@@ -49,7 +50,7 @@ void ThermalImageRenderer::render(MLX90640Frame *processedFrame)
         minTemp=min(minTemp,processedFrame->temperature[i]);
         maxTemp=max(maxTemp,processedFrame->temperature[i]);
     }
-    short range=max<short>(minRange,maxTemp-minTemp);
+    short range=max<short>(minRange*processedFrame->scaleFactor,maxTemp-minTemp);
     for(int y=0;y<(2*ny)-1;y++)
     {
         for(int x=0;x<(2*nx)-1;x++)
@@ -70,6 +71,10 @@ void ThermalImageRenderer::render(MLX90640Frame *processedFrame)
     for(int x=62;x<=63;x++)
         for(unsigned int ydex=0;ydex<sizeof(yrange);ydex++)
             crosshairPixel(x,yrange[ydex]);
+    //Scale temperatures to express them in °C
+    minTemp=roundedDiv(minTemp,processedFrame->scaleFactor);
+    maxTemp=roundedDiv(maxTemp,processedFrame->scaleFactor);
+    crosshairTemp=roundedDiv(crosshairTemp,processedFrame->scaleFactor);
 }
 
 void ThermalImageRenderer::draw(DrawingContext& dc, Point p)
@@ -80,7 +85,7 @@ void ThermalImageRenderer::draw(DrawingContext& dc, Point p)
 
 void ThermalImageRenderer::legend(mxgui::Color *legend, int legendSize)
 {
-    int colormapRange=max(0,min<int>(maxTemp-minTemp,15))*255/15;
+    int colormapRange=max(0,min<int>(maxTemp-minTemp,minRange))*255/minRange;
     for(int i=0;i<legendSize;i++) legend[i]=colormap[colormapRange*i/(legendSize-1)];
 }
 
@@ -141,16 +146,19 @@ void Application::run()
 {
     bootMessage();
     waitPowerButtonReleased();
-    drawStaticPartOfMainFrame();
     
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
     
     auto renderer=make_unique<ThermalImageRenderer>();
+    MLX90640Frame *processedFrame=nullptr;
+    processedFrameQueue.get(processedFrame);
+    delete processedFrame; //Drop first frame
+    processedFrameQueue.get(processedFrame);
+    drawStaticPartOfMainFrame();
+    
     for(;;)
     {
-        MLX90640Frame *processedFrame=nullptr;
-        processedFrameQueue.get(processedFrame);
         auto t1 = getTime();
         renderer->render(processedFrame);
         auto t2 = getTime();
@@ -183,6 +191,7 @@ void Application::run()
         
         iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
         if(on_btn::value()==1) break;
+        processedFrameQueue.get(processedFrame);
     }
     
     quit=true;

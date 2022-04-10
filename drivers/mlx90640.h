@@ -15,6 +15,7 @@ class MLX90640Frame
 {
 public:
     static const int nx=32, ny=24;
+    static const int scaleFactor=::scaleFactor;
     short temperature[nx*ny]; // Heavy object! 1.5 KByte
     
     short getTempAt(int x, int y) { return temperature[(nx-1-x)+y*nx]; }

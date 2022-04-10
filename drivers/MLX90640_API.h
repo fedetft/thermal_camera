@@ -18,6 +18,12 @@
 #define _MLX640_API_H_
 
 #include <stdint.h>
+
+/*
+ * Temperature returned by MLX90640_CalculateToShort is multipled by this
+ */
+const int scaleFactor=4;
+
     
   typedef struct
     {

@@ -41,7 +41,7 @@ private:
     
     mxgui::Color irImage[94][126];
     short minTemp, maxTemp, crosshairTemp;
-    const short minRange=15.f;
+    const short minRange=15;
 };
 
 class Application

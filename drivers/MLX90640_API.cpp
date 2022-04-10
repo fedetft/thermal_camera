@@ -604,7 +604,10 @@ void MLX90640_CalculateToShort(const uint16_t *frameData, const paramsMLX90640 *
             
             To = sqrtf(sqrtf(irData / (alphaCompensated * alphaCorrR[range] * (1 + params->ksTo[range] * (To - params->ct[range]))) + taTr)) - 273.15;
             
-            result[pixelNumber] = To>0.f ? std::min(999.f,To+0.5f) : std::max(-99.f,To-0.5f);
+            //Clamp to -99..999°C multiplied by scaleFactor
+            result[pixelNumber] = static_cast<short>(
+                static_cast<float>(scaleFactor)*
+                    (To>0.f ? std::min(999.f,To+0.5f) : std::max(-99.f,To-0.5f)));
         }
     }
 }
