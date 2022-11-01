@@ -33,11 +33,6 @@
 void initializeBoard();
 
 /**
- * Used after power up to wait until the user releases the power button
- */
-void waitPowerButtonReleased();
-
-/**
  * Shutdown the board
  */
 void shutdownBoard();

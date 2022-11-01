@@ -16,9 +16,9 @@ SUBDIRS := $(KPATH) mxgui
 ##
 ## List here your source files (both .s, .c and .cpp)
 ##
-SRC :=                                  \
-main.cpp application.cpp colormap.cpp   \
-drivers/display_er_oledm015.cpp drivers/misc.cpp        \
+SRC :=                                             \
+main.cpp application.cpp renderer.cpp colormap.cpp \
+drivers/display_er_oledm015.cpp drivers/misc.cpp   \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp
 
 IMG :=  \

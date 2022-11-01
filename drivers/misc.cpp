@@ -53,12 +53,6 @@ void initializeBoard()
     ADC1->SQR3=1; //Convert channel 1 (battery voltage)
 }
 
-void waitPowerButtonReleased()
-{
-    while(on_btn::value()==1) Thread::sleep(100);
-    Thread::sleep(50);
-}
-
 void shutdownBoard()
 {
     Thread::sleep(50);

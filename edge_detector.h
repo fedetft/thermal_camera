@@ -27,73 +27,24 @@
 
 #pragma once
 
-#include <memory>
 #include <miosix.h>
-#include <mxgui/display.h>
-#include <drivers/stm32f2_f4_i2c.h>
-#include <drivers/mlx90640.h>
-#include <drivers/hwmapping.h>
-#include <renderer.h>
-#include <edge_detector.h>
 
-enum class ButtonPressed
-{
-    None,
-    Up,
-    On,
-    Both
-};
-
-/**
- * The thermal camera application logic lives here
- */
-class Application
+class ButtonEdgeDetector
 {
 public:
-    
-    Application(mxgui::Display& display);
+    ButtonEdgeDetector(miosix::GpioPin pin, int activeLevel=1)
+        : pin(pin), state(false), active(activeLevel==0) {}
 
-    void run();
-    
-private:
-    Application(const Application&)=delete;
-    Application& operator=(const Application&)=delete;
-    
-    void bootMessage();
-
-    ButtonPressed checkButtons();
-
-    ButtonPressed mainScreen();
-    
-    void drawStaticPartOfMainScreen();
-
-    void drawBatteryIcon(mxgui::DrawingContext& dc);
-    
-    void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,
-                         mxgui::Font f, short temperature);
-
-    void menuScreen();
-
-    void drawStaticPartOfMenuScreen();
-    
-    void sensorThread();
-    
-    void processThread();
-    
-    static inline unsigned short to565(unsigned short r, unsigned short g, unsigned short b)
+    bool pressed()
     {
-        return ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | ((b & 0b11111000) >> 3);
+        bool newState=pin.value() ^ active;
+        bool result = newState && state==false;
+        state=newState;
+        return result;
     }
 
-    mxgui::Display& display;
-    ButtonEdgeDetector upButton;
-    ButtonEdgeDetector onButton;
-    std::unique_ptr<miosix::I2C1Master> i2c;
-    std::unique_ptr<MLX90640> sensor;
-    std::unique_ptr<ThermalImageRenderer> renderer;
-    int refresh;
-    float emissivity=0.95f;
-    miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
-    miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
-    bool quit=false;
+private:
+    miosix::GpioPin pin;
+    bool state;
+    bool active;
 };

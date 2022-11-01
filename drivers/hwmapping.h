@@ -42,7 +42,7 @@ using oled_res    = Gpio<GPIOC_BASE,4>;
 using sen_scl     = Gpio<GPIOB_BASE,6>;  //I2C1
 using sen_sda     = Gpio<GPIOB_BASE,7>;  //I2C1
 
-//Bottons and power management
+//Buttons and power management
 using up_btn      = Gpio<GPIOC_BASE,10>;
 using on_btn      = Gpio<GPIOC_BASE,11>;
 using keep_on     = Gpio<GPIOA_BASE,2>;

@@ -26,10 +26,9 @@
  ***************************************************************************/
 
 #include <application.h>
-#include <drivers/hwmapping.h>
-#include <drivers/misc.h>
-#include <colormap.h>
 #include <thread>
+#include <mxgui/misc_inst.h>
+#include <drivers/misc.h>
 #include <images/batt100icon.h>
 #include <images/batt75icon.h>
 #include <images/batt50icon.h>
@@ -62,106 +61,15 @@ using namespace mxgui;
 //process = 77418064 render =  2051966 draw = 16335033 8Hz scaled short DMA UI
 
 //
-// class ThermalImageRenderer
-//
-
-void ThermalImageRenderer::render(MLX90640Frame *processedFrame)
-{
-    const int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
-    minTemp=processedFrame->temperature[0];
-    maxTemp=processedFrame->temperature[0];
-    crosshairTemp=processedFrame->getTempAt(nx/2,ny/2);
-    for(int i=0;i<nx*ny;i++)
-    {
-        minTemp=min(minTemp,processedFrame->temperature[i]);
-        maxTemp=max(maxTemp,processedFrame->temperature[i]);
-    }
-    short range=max<short>(minRange*processedFrame->scaleFactor,maxTemp-minTemp);
-    for(int y=0;y<(2*ny)-1;y++)
-    {
-        for(int x=0;x<(2*nx)-1;x++)
-        {
-            Color c=interpolate2d(processedFrame,x,y,minTemp,range);
-            irImage[2*y  ][2*x  ]=c; //Image layout in memory is reversed
-            irImage[2*y+1][2*x  ]=c;
-            irImage[2*y  ][2*x+1]=c;
-            irImage[2*y+1][2*x+1]=c;
-        }
-    }
-    //Draw crosshair
-    static const unsigned char xrange[]={58,59,60,65,66,67};
-    for(unsigned int xdex=0;xdex<sizeof(xrange);xdex++)
-        for(int y=46;y<=47;y++)
-            crosshairPixel(xrange[xdex],y);
-    static const unsigned char yrange[]={42,43,44,49,50,51};
-    for(int x=62;x<=63;x++)
-        for(unsigned int ydex=0;ydex<sizeof(yrange);ydex++)
-            crosshairPixel(x,yrange[ydex]);
-    //Scale temperatures to express them in °C
-    minTemp=roundedDiv(minTemp,processedFrame->scaleFactor);
-    maxTemp=roundedDiv(maxTemp,processedFrame->scaleFactor);
-    crosshairTemp=roundedDiv(crosshairTemp,processedFrame->scaleFactor);
-}
-
-void ThermalImageRenderer::draw(DrawingContext& dc, Point p)
-{
-    Image img(94,126,irImage);
-    dc.drawImage(p,img);
-}
-
-void ThermalImageRenderer::legend(mxgui::Color *legend, int legendSize)
-{
-    int colormapRange=max(0,min<int>(maxTemp-minTemp,minRange))*255/minRange;
-    for(int i=0;i<legendSize;i++) legend[i]=colormap[colormapRange*i/(legendSize-1)];
-}
-
-Color ThermalImageRenderer::interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r)
-{
-    if((x & 1)==0 && (y & 1)==0)
-        return pixMap(processedFrame->getTempAt(x/2,y/2),m,r);
-
-    if((x & 1)==0) //1d interp along y axis
-    {
-        short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt(x/2,(y/2)+1);
-        return pixMap(roundedDiv(t,2),m,r);
-    }
-    
-    if((y & 1)==0) //1d interp along x axis
-    {
-        short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt((x/2)+1,y/2);
-        return pixMap(roundedDiv(t,2),m,r);
-    }
-    
-    //2d interpolation
-    short t=processedFrame->getTempAt(x/2,y/2)    +processedFrame->getTempAt((x/2)+1,y/2)
-           +processedFrame->getTempAt(x/2,(y/2)+1)+processedFrame->getTempAt((x/2)+1,(y/2)+1);
-    return pixMap(roundedDiv(t,4),m,r);
-}
-
-Color ThermalImageRenderer::pixMap(short t, short m, short r)
-{
-    int pixel=(255*(t-m))/r;
-    return colormap[max(0,min(255,pixel))];
-}
-
-void ThermalImageRenderer::crosshairPixel(int x, int y)
-{
-    irImage[y][x]=colorBrightness(irImage[y][x])>16 ? black : white;
-}
-
-int ThermalImageRenderer::colorBrightness(mxgui::Color c)
-{
-    return ((c & 31) + (c>>6) + (c>>11))/3;
-}
-
-//
 // class Application
 //
 
 Application::Application(Display& display)
     : display(display),
+      upButton(miosix::up_btn::getPin(),0), onButton(miosix::on_btn::getPin(),1),
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),400)),
-      sensor(make_unique<MLX90640>(i2c.get()))
+      sensor(make_unique<MLX90640>(i2c.get())),
+      renderer(make_unique<ThermalImageRenderer>())
 {
     refresh=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
     if(sensor->setRefresh(refreshFromInt(refresh))==false)
@@ -171,56 +79,25 @@ Application::Application(Display& display)
 void Application::run()
 {
     bootMessage();
-    waitPowerButtonReleased();
-    
+    checkButtons();
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
-    
-    auto renderer=make_unique<ThermalImageRenderer>(); //Would overflow stack
+
+    //Drop first frame
     MLX90640Frame *processedFrame=nullptr;
     processedFrameQueue.get(processedFrame);
-    delete processedFrame; //Drop first frame
-    processedFrameQueue.get(processedFrame);
-    drawStaticPartOfMainFrame();
+    delete processedFrame;
     
-    for(;;)
+    while(quit==false)
     {
-        auto t1 = getTime();
-        renderer->render(processedFrame);
-        auto t2 = getTime();
-        delete processedFrame;
+        switch(mainScreen())
         {
-            DrawingContext dc(display);
-            //For point coordinates see ui-mockup-mainframe.png
-            char line[16];
-            snprintf(line,sizeof(line),"%.2f  %2dfps ",emissivity,refresh);
-            dc.setFont(tahoma);
-            dc.write(Point(11,0),line);
-            Point batteryIconPoint(104,0);
-            switch(batteryLevel(getBatteryVoltage()))
-            {
-                case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
-                case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
-                case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
-                case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
-                case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
-            }
-            renderer->draw(dc,Point(1,13));
-            drawTemperature(dc,Point(0,114),Point(16,122),tahoma,renderer->minTemperature());
-            drawTemperature(dc,Point(99,114),Point(115,122),tahoma,renderer->maxTemperature());
-            drawTemperature(dc,Point(38,108),Point(70,122),droid21,renderer->crosshairTemperature());
-            Color *buffer=dc.getScanLineBuffer();
-            renderer->legend(buffer,dc.getWidth());
-            for(int y=124;y<=127;y++) dc.scanLineBuffer(Point(0,y),dc.getWidth());
+            case ButtonPressed::On: quit=true;    break;
+            case ButtonPressed::Up: menuScreen(); break;
+            default: break;
         }
-        auto t3 = getTime();
-        
-        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
-        if(on_btn::value()==1) break;
-        processedFrameQueue.get(processedFrame);
     }
     
-    quit=true;
     if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevent deadlock
     st.join();
     pt.join();
@@ -245,12 +122,57 @@ void Application::bootMessage()
     dc.write(Point((width-s1pix)/2,y),s1);
 }
 
-void Application::drawStaticPartOfMainFrame()
+ButtonPressed Application::checkButtons()
+{
+    bool on=onButton.pressed();
+    bool up=upButton.pressed();
+    if(on && up) return ButtonPressed::Both;
+    if(on) return ButtonPressed::On;
+    if(up) return ButtonPressed::Up;
+    return ButtonPressed::None;
+}
+
+ButtonPressed Application::mainScreen()
+{
+    drawStaticPartOfMainScreen();
+    for(;;)
+    {
+        MLX90640Frame *processedFrame=nullptr;
+        processedFrameQueue.get(processedFrame);
+        auto t1 = getTime();
+        renderer->render(processedFrame);
+        delete processedFrame;
+        auto t2 = getTime();
+        {
+            DrawingContext dc(display);
+            //For point coordinates see ui-mockup-main-screen.png
+            drawBatteryIcon(dc);
+            renderer->draw(dc,Point(1,13));
+            drawTemperature(dc,Point(0,114),Point(16,122),tahoma,renderer->minTemperature());
+            drawTemperature(dc,Point(99,114),Point(115,122),tahoma,renderer->maxTemperature());
+            drawTemperature(dc,Point(38,108),Point(70,122),droid21,renderer->crosshairTemperature());
+            Color *buffer=dc.getScanLineBuffer();
+            renderer->legend(buffer,dc.getWidth());
+            for(int y=124;y<=127;y++) dc.scanLineBuffer(Point(0,y),dc.getWidth());
+        }
+        auto t3 = getTime();
+
+        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
+        auto btn=checkButtons();
+        if(btn!=ButtonPressed::None) return btn;
+    }
+}
+
+void Application::drawStaticPartOfMainScreen()
 {
     DrawingContext dc(display);
     dc.clear(black);
-    //For point coordinates see ui-mockup-mainframe.png
+    //For point coordinates see ui-mockup-main-screen.png
     dc.drawImage(Point(0,0),emissivityicon);
+    char line[16];
+    snprintf(line,sizeof(line),"%.2f  %2dfps ",emissivity,refresh);
+    dc.setFont(tahoma);
+    dc.write(Point(11,0),line);
     Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
     dc.line(Point(0,12),Point(0,107),darkGrey);
     dc.line(Point(1,12),Point(127,12),darkGrey);
@@ -259,6 +181,19 @@ void Application::drawStaticPartOfMainFrame()
     dc.drawImage(Point(18,115),smallcelsiusicon);
     dc.drawImage(Point(117,115),smallcelsiusicon);
     dc.drawImage(Point(72,109),largecelsiusicon);
+}
+
+void Application::drawBatteryIcon(mxgui::DrawingContext& dc)
+{
+    Point batteryIconPoint(104,0);
+    switch(batteryLevel(getBatteryVoltage()))
+    {
+        case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
+        case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
+        case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
+        case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
+        case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
+    }
 }
 
 void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
@@ -275,6 +210,35 @@ void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
     }
     dc.setFont(f);
     dc.clippedWrite(a,a,b,line);
+}
+
+void Application::menuScreen()
+{
+    //TODO
+    drawStaticPartOfMenuScreen();
+    for(;;)
+    {
+        MLX90640Frame *processedFrame=nullptr;
+        processedFrameQueue.get(processedFrame);
+        renderer->renderSmall(processedFrame);
+        delete processedFrame;
+        {
+            DrawingContext dc(display);
+            //For point coordinates see ui-mockup-menu-screen.png
+            drawBatteryIcon(dc);
+            renderer->drawSmall(dc,Point(1,1));
+        }
+        upButton.pressed();
+        if(onButton.pressed()) break;
+    }
+}
+
+void Application::drawStaticPartOfMenuScreen()
+{
+    DrawingContext dc(display);
+    dc.clear(black);
+    //For point coordinates see ui-mockup-menu-screen.png
+    //TODO
 }
 
 void Application::sensorThread()
