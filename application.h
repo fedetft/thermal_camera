@@ -40,8 +40,7 @@ enum class ButtonPressed
 {
     None,
     Up,
-    On,
-    Both
+    On
 };
 
 /**
@@ -61,20 +60,24 @@ private:
     
     void bootMessage();
 
-    ButtonPressed checkButtons();
-
     ButtonPressed mainScreen();
     
     void drawStaticPartOfMainScreen();
 
+    void menuScreen();
+
+    ButtonPressed menuScreenLoop();
+
+    void drawStaticPartOfMenuScreen();
+
     void drawBatteryIcon(mxgui::DrawingContext& dc);
-    
+
     void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,
                          mxgui::Font f, short temperature);
 
-    void menuScreen();
+    ButtonPressed checkButtons();
 
-    void drawStaticPartOfMenuScreen();
+    void setFrameRate(int fr);
     
     void sensorThread();
     
@@ -91,8 +94,12 @@ private:
     std::unique_ptr<miosix::I2C1Master> i2c;
     std::unique_ptr<MLX90640> sensor;
     std::unique_ptr<ThermalImageRenderer> renderer;
-    int refresh;
-    float emissivity=0.95f;
+    struct Options
+    {
+        int frameRate=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
+        float emissivity=0.95f;
+    };
+    Options options;
     miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
     miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
     bool quit=false;

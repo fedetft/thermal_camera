@@ -71,15 +71,14 @@ Application::Application(Display& display)
       sensor(make_unique<MLX90640>(i2c.get())),
       renderer(make_unique<ThermalImageRenderer>())
 {
-    refresh=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
-    if(sensor->setRefresh(refreshFromInt(refresh))==false)
-        puts("Error setting framerate");
+    // TODO load options from flash
+    setFrameRate(options.frameRate);
 }
 
 void Application::run()
 {
     bootMessage();
-    checkButtons();
+    checkButtons(); //Discard buttons already pressed at this point
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
 
@@ -98,7 +97,7 @@ void Application::run()
         }
     }
     
-    if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevent deadlock
+    if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
     st.join();
     pt.join();
 }
@@ -120,16 +119,6 @@ void Application::bootMessage()
     y+=4;
     dc.setFont(tahoma);
     dc.write(Point((width-s1pix)/2,y),s1);
-}
-
-ButtonPressed Application::checkButtons()
-{
-    bool on=onButton.pressed();
-    bool up=upButton.pressed();
-    if(on && up) return ButtonPressed::Both;
-    if(on) return ButtonPressed::On;
-    if(up) return ButtonPressed::Up;
-    return ButtonPressed::None;
 }
 
 ButtonPressed Application::mainScreen()
@@ -170,10 +159,10 @@ void Application::drawStaticPartOfMainScreen()
     //For point coordinates see ui-mockup-main-screen.png
     dc.drawImage(Point(0,0),emissivityicon);
     char line[16];
-    snprintf(line,sizeof(line),"%.2f  %2dfps ",emissivity,refresh);
+    snprintf(line,sizeof(line),"%.2f  %2dfps ",options.emissivity,options.frameRate);
     dc.setFont(tahoma);
     dc.write(Point(11,0),line);
-    Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
+    const Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
     dc.line(Point(0,12),Point(0,107),darkGrey);
     dc.line(Point(1,12),Point(127,12),darkGrey);
     dc.line(Point(127,13),Point(127,107),lightGrey);
@@ -181,6 +170,124 @@ void Application::drawStaticPartOfMainScreen()
     dc.drawImage(Point(18,115),smallcelsiusicon);
     dc.drawImage(Point(117,115),smallcelsiusicon);
     dc.drawImage(Point(72,109),largecelsiusicon);
+}
+
+void Application::menuScreen()
+{
+    drawStaticPartOfMenuScreen();
+    enum MenuEntry
+    {
+        Emissivity         = 0,
+        EmissivitySelected = 0 | 16,
+        FrameRate          = 1,
+        FrameRateSelected  = 1 | 16,
+        SaveChanges        = 2,
+        Back               = 3
+    };
+    const int numEntries=4;
+    int entry=Emissivity;
+    const char labels[numEntries][16]=
+    {
+        " Emissivity",
+        " Frame rate",
+        " Save changes",
+        " Back"
+    };
+    for(;;)
+    {
+        {
+            DrawingContext dc(display);
+            auto menuEntryColor=[&](bool active)
+            {
+                if(active) dc.setTextColor(make_pair(black,to565(255,128,0)));
+                else dc.setTextColor(make_pair(white,black));
+            };
+            dc.setFont(tahoma);
+            for(int i=0;i<numEntries;i++)
+            {
+                menuEntryColor(entry==i);
+                dc.write(Point(0,50+i*tahoma.getHeight()),labels[i]);
+            }
+            menuEntryColor(entry==EmissivitySelected);
+            dc.write(Point(75,50+0*tahoma.getHeight()),
+                     string(" ")+to_string(options.emissivity).substr(0,4));
+            menuEntryColor(entry==FrameRateSelected);
+            dc.write(Point(75,50+1*tahoma.getHeight()),
+                     string(" ")+to_string(options.frameRate)+"  ");
+            dc.setTextColor(make_pair(white,black));
+        }
+        switch(menuScreenLoop())
+        {
+            case ButtonPressed::On:
+                switch(entry)
+                {
+                    case Emissivity: entry=EmissivitySelected; break;
+                    case EmissivitySelected: entry=Emissivity; break;
+                    case FrameRate: entry=FrameRateSelected; break;
+                    case FrameRateSelected: entry=FrameRate; break;
+                    case SaveChanges: /* TODO save options to flash */ break;
+                    case Back: return;
+                }
+                break;
+            case ButtonPressed::Up:
+                switch(entry)
+                {
+                    case EmissivitySelected:
+                        options.emissivity+=0.05;
+                        if(options.emissivity>0.975) options.emissivity=0.05;
+                        break;
+                    case FrameRateSelected:
+                        setFrameRate(options.frameRate<8 ? 2*options.frameRate : 1);
+                        break;
+                    case Back:
+                        entry=Emissivity;
+                        break;
+                    default:
+                        entry++;
+                        break;
+                }
+                break;
+            default: break;
+        }
+    }
+}
+
+ButtonPressed Application::menuScreenLoop()
+{
+    for(;;)
+    {
+        MLX90640Frame *processedFrame=nullptr;
+        processedFrameQueue.get(processedFrame);
+        renderer->renderSmall(processedFrame);
+        delete processedFrame;
+        {
+            DrawingContext dc(display);
+            //For point coordinates see ui-mockup-menu-screen.png
+            drawBatteryIcon(dc);
+            renderer->drawSmall(dc,Point(1,1));
+            drawTemperature(dc,Point(96,12),Point(112,20),tahoma,renderer->maxTemperature());
+            drawTemperature(dc,Point(96,25),Point(112,33),tahoma,renderer->minTemperature());
+        }
+        auto btn=checkButtons();
+        if(btn!=ButtonPressed::None) return btn;
+    }
+}
+
+void Application::drawStaticPartOfMenuScreen()
+{
+    DrawingContext dc(display);
+    dc.clear(black);
+    //For point coordinates see ui-mockup-menu-screen.png
+    dc.setFont(tahoma);
+    dc.write(Point(66,12),"Tmax");
+    dc.write(Point(66,25),"Tmin");
+    dc.drawImage(Point(114,13),smallcelsiusicon);
+    dc.drawImage(Point(114,26),smallcelsiusicon);
+    Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
+    dc.line(Point(0,0),Point(0,48),darkGrey);
+    dc.line(Point(1,0),Point(64,0),darkGrey);
+    dc.line(Point(1,48),Point(64,48),lightGrey);
+    dc.line(Point(64,1),Point(64,47),lightGrey);
 }
 
 void Application::drawBatteryIcon(mxgui::DrawingContext& dc)
@@ -212,33 +319,19 @@ void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
     dc.clippedWrite(a,a,b,line);
 }
 
-void Application::menuScreen()
+ButtonPressed Application::checkButtons()
 {
-    //TODO
-    drawStaticPartOfMenuScreen();
-    for(;;)
-    {
-        MLX90640Frame *processedFrame=nullptr;
-        processedFrameQueue.get(processedFrame);
-        renderer->renderSmall(processedFrame);
-        delete processedFrame;
-        {
-            DrawingContext dc(display);
-            //For point coordinates see ui-mockup-menu-screen.png
-            drawBatteryIcon(dc);
-            renderer->drawSmall(dc,Point(1,1));
-        }
-        upButton.pressed();
-        if(onButton.pressed()) break;
-    }
+    bool on=onButton.pressed();
+    bool up=upButton.pressed();
+    if(on) return ButtonPressed::On;
+    if(up) return ButtonPressed::Up;
+    return ButtonPressed::None;
 }
 
-void Application::drawStaticPartOfMenuScreen()
+void Application::setFrameRate(int fr)
 {
-    DrawingContext dc(display);
-    dc.clear(black);
-    //For point coordinates see ui-mockup-menu-screen.png
-    //TODO
+    if(sensor->setRefresh(refreshFromInt(fr))) options.frameRate=fr;
+    else puts("Error setting framerate");
 }
 
 void Application::sensorThread()
@@ -276,7 +369,7 @@ void Application::processThread()
         if(rawFrame==nullptr) continue; //Happens on shutdown
         auto t1=getTime();
         auto *processedFrame=new MLX90640Frame;
-        sensor->processFrame(rawFrame,processedFrame,emissivity);
+        sensor->processFrame(rawFrame,processedFrame,options.emissivity);
         delete rawFrame;
         processedFrameQueue.put(processedFrame);
         auto t2=getTime();

@@ -98,7 +98,7 @@ static const unsigned int level2MaxNumApps=4;
 #define MXGUI_FONT_DROID21
 #define MXGUI_FONT_MISCFIXED
 #define MXGUI_FONT_TAHOMA
-#define MXGUI_ENABLE_BOLD_FONTS
+// #define MXGUI_ENABLE_BOLD_FONTS
 
 #else //_MIOSIX
 
