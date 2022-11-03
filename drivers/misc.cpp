@@ -68,7 +68,7 @@ int getBatteryVoltage()
     while((ADC1->SR & ADC_SR_EOC)==0) ; //Wait for conversion
     int result=ADC1->DR; //Read result
     ADC1->CR2=0; //Turn ADC OFF
-    //return the voltage iv V multiplied by 10, so 40=4V
+    //return the voltage in V multiplied by 10, so 40=4V
     return result/62; //4096/2/Vcc/10=62, Vcc=3.3V
 }
 

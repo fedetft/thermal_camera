@@ -49,57 +49,58 @@ using namespace mxgui;
  * I2C1 speed (sensor)  400kHz
  */
 
-//read = 785745170 process = 114363196 draw = 87720263 1Hz double
-//read = 826804835 process =  75025464 draw = 87711063 1Hz float
-//read =  64109598 process =  75087397 draw = 87643263 4Hz float
-//read = 137824495 process =  75290863 render = 11667433 draw = 75779830 4Hz float
-//read =  13095166 process =  75856930 render = 12045033 draw = 14686200 8Hz float
-//read =  16454166 process =  76031631 render = 12072232 draw = 15198566 8Hz float DMA .14A
-//process = 76482397 render = 12227133 draw = 13807066 8Hz float DMA
-//process = 75880497 render = 12312733 draw = 16298632 8Hz float DMA UI
-//process = 77364697 render =  2053867 draw = 16339532 8Hz short DMA UI
-//process = 77418064 render =  2051966 draw = 16335033 8Hz scaled short DMA UI
-
 //
 // class Application
 //
 
 Application::Application(Display& display)
     : display(display),
-      upButton(miosix::up_btn::getPin(),0), onButton(miosix::on_btn::getPin(),1),
+      upButton(up_btn::getPin(),0), onButton(on_btn::getPin(),1),
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),400)),
       sensor(make_unique<MLX90640>(i2c.get())),
       renderer(make_unique<ThermalImageRenderer>())
 {
     // TODO load options from flash
-    setFrameRate(options.frameRate);
+    if(sensor->setRefresh(refreshFromInt(options.frameRate))==false)
+        puts("Error setting framerate");
 }
 
 void Application::run()
 {
     bootMessage();
-    checkButtons(); //Discard buttons already pressed at this point
+    onButton.pressed(); upButton.pressed(); //Discard buttons already pressed at this point
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
 
-    //Drop first frame
+    //Drop first frame before starting the render thread
     MLX90640Frame *processedFrame=nullptr;
     processedFrameQueue.get(processedFrame);
     delete processedFrame;
+
+    thread rt(&Application::renderThread,this);
     
+    drawStaticPartOfMainScreen();
     while(quit==false)
     {
-        switch(mainScreen())
+        switch(checkButtons())
         {
-            case ButtonPressed::On: quit=true;    break;
-            case ButtonPressed::Up: menuScreen(); break;
+            case ButtonPressed::On:
+                MemoryProfiling::print();
+                quit=true;
+                break;
+            case ButtonPressed::Up:
+                menuScreen();
+                drawStaticPartOfMainScreen();
+                break;
             default: break;
         }
     }
     
-    if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
     st.join();
+    if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
     pt.join();
+    if(processedFrameQueue.isEmpty()) processedFrameQueue.put(nullptr); //Prevents deadlock
+    rt.join();
 }
 
 void Application::bootMessage()
@@ -119,37 +120,6 @@ void Application::bootMessage()
     y+=4;
     dc.setFont(tahoma);
     dc.write(Point((width-s1pix)/2,y),s1);
-}
-
-ButtonPressed Application::mainScreen()
-{
-    drawStaticPartOfMainScreen();
-    for(;;)
-    {
-        MLX90640Frame *processedFrame=nullptr;
-        processedFrameQueue.get(processedFrame);
-        auto t1 = getTime();
-        renderer->render(processedFrame);
-        delete processedFrame;
-        auto t2 = getTime();
-        {
-            DrawingContext dc(display);
-            //For point coordinates see ui-mockup-main-screen.png
-            drawBatteryIcon(dc);
-            renderer->draw(dc,Point(1,13));
-            drawTemperature(dc,Point(0,114),Point(16,122),tahoma,renderer->minTemperature());
-            drawTemperature(dc,Point(99,114),Point(115,122),tahoma,renderer->maxTemperature());
-            drawTemperature(dc,Point(38,108),Point(70,122),droid21,renderer->crosshairTemperature());
-            Color *buffer=dc.getScanLineBuffer();
-            renderer->legend(buffer,dc.getWidth());
-            for(int y=124;y<=127;y++) dc.scanLineBuffer(Point(0,y),dc.getWidth());
-        }
-        auto t3 = getTime();
-
-        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
-        auto btn=checkButtons();
-        if(btn!=ButtonPressed::None) return btn;
-    }
 }
 
 void Application::drawStaticPartOfMainScreen()
@@ -172,8 +142,26 @@ void Application::drawStaticPartOfMainScreen()
     dc.drawImage(Point(72,109),largecelsiusicon);
 }
 
+void Application::drawStaticPartOfMenuScreen()
+{
+    DrawingContext dc(display);
+    dc.clear(black);
+    //For point coordinates see ui-mockup-menu-screen.png
+    dc.setFont(tahoma);
+    dc.write(Point(66,12),"Tmax");
+    dc.write(Point(66,25),"Tmin");
+    dc.drawImage(Point(114,13),smallcelsiusicon);
+    dc.drawImage(Point(114,26),smallcelsiusicon);
+    Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
+    dc.line(Point(0,0),Point(0,48),darkGrey);
+    dc.line(Point(1,0),Point(64,0),darkGrey);
+    dc.line(Point(1,48),Point(64,48),lightGrey);
+    dc.line(Point(64,1),Point(64,47),lightGrey);
+}
+
 void Application::menuScreen()
 {
+    small=true;
     drawStaticPartOfMenuScreen();
     enum MenuEntry
     {
@@ -188,10 +176,10 @@ void Application::menuScreen()
     int entry=Emissivity;
     const char labels[numEntries][16]=
     {
-        " Emissivity",
-        " Frame rate",
-        " Save changes",
-        " Back"
+        " Emissivity ",
+        " Frame rate ",
+        " Save changes ",
+        " Back "
     };
     for(;;)
     {
@@ -216,7 +204,7 @@ void Application::menuScreen()
                      string(" ")+to_string(options.frameRate)+"  ");
             dc.setTextColor(make_pair(white,black));
         }
-        switch(menuScreenLoop())
+        switch(checkButtons())
         {
             case ButtonPressed::On:
                 switch(entry)
@@ -226,18 +214,21 @@ void Application::menuScreen()
                     case FrameRate: entry=FrameRateSelected; break;
                     case FrameRateSelected: entry=FrameRate; break;
                     case SaveChanges: /* TODO save options to flash */ break;
-                    case Back: return;
+                    case Back:
+                        small=false;
+                        return;
                 }
                 break;
             case ButtonPressed::Up:
                 switch(entry)
                 {
                     case EmissivitySelected:
-                        options.emissivity+=0.05;
-                        if(options.emissivity>0.975) options.emissivity=0.05;
+                        if(options.emissivity>0.925) options.emissivity=0.05;
+                        else options.emissivity+=0.05;
                         break;
                     case FrameRateSelected:
-                        setFrameRate(options.frameRate<8 ? 2*options.frameRate : 1);
+                        if(options.frameRate>=8) options.frameRate=1;
+                        else options.frameRate*=2;
                         break;
                     case Back:
                         entry=Emissivity;
@@ -252,48 +243,11 @@ void Application::menuScreen()
     }
 }
 
-ButtonPressed Application::menuScreenLoop()
-{
-    for(;;)
-    {
-        MLX90640Frame *processedFrame=nullptr;
-        processedFrameQueue.get(processedFrame);
-        renderer->renderSmall(processedFrame);
-        delete processedFrame;
-        {
-            DrawingContext dc(display);
-            //For point coordinates see ui-mockup-menu-screen.png
-            drawBatteryIcon(dc);
-            renderer->drawSmall(dc,Point(1,1));
-            drawTemperature(dc,Point(96,12),Point(112,20),tahoma,renderer->maxTemperature());
-            drawTemperature(dc,Point(96,25),Point(112,33),tahoma,renderer->minTemperature());
-        }
-        auto btn=checkButtons();
-        if(btn!=ButtonPressed::None) return btn;
-    }
-}
-
-void Application::drawStaticPartOfMenuScreen()
-{
-    DrawingContext dc(display);
-    dc.clear(black);
-    //For point coordinates see ui-mockup-menu-screen.png
-    dc.setFont(tahoma);
-    dc.write(Point(66,12),"Tmax");
-    dc.write(Point(66,25),"Tmin");
-    dc.drawImage(Point(114,13),smallcelsiusicon);
-    dc.drawImage(Point(114,26),smallcelsiusicon);
-    Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
-    dc.line(Point(0,0),Point(0,48),darkGrey);
-    dc.line(Point(1,0),Point(64,0),darkGrey);
-    dc.line(Point(1,48),Point(64,48),lightGrey);
-    dc.line(Point(64,1),Point(64,47),lightGrey);
-}
-
 void Application::drawBatteryIcon(mxgui::DrawingContext& dc)
 {
     Point batteryIconPoint(104,0);
-    switch(batteryLevel(getBatteryVoltage()))
+    prevBatteryVoltage=min(prevBatteryVoltage,getBatteryVoltage());
+    switch(batteryLevel(prevBatteryVoltage))
     {
         case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
         case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
@@ -321,28 +275,37 @@ void Application::drawTemperature(DrawingContext& dc, Point a, Point b,
 
 ButtonPressed Application::checkButtons()
 {
-    bool on=onButton.pressed();
-    bool up=upButton.pressed();
-    if(on) return ButtonPressed::On;
-    if(up) return ButtonPressed::Up;
-    return ButtonPressed::None;
-}
-
-void Application::setFrameRate(int fr)
-{
-    if(sensor->setRefresh(refreshFromInt(fr))) options.frameRate=fr;
-    else puts("Error setting framerate");
+    for(;;)
+    {
+        {
+            DrawingContext dc(display);
+            drawBatteryIcon(dc); //Here for convenience
+        }
+        Thread::sleep(80);
+        bool on=onButton.pressed();
+        bool up=upButton.pressed();
+        if(on) return ButtonPressed::On;
+        if(up) return ButtonPressed::Up;
+    }
 }
 
 void Application::sensorThread()
 {
     //High priority for sensor read, prevents I2C reads from starving
     Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
+    auto previousRefreshRate=sensor->getRefresh();
     while(!quit)
     {
         auto *rawFrame=new MLX90640RawFrame;
         bool success;
         do {
+            auto currentRefreshRate=refreshFromInt(options.frameRate);
+            if(previousRefreshRate!=currentRefreshRate)
+            {
+                if(sensor->setRefresh(currentRefreshRate))
+                    previousRefreshRate=currentRefreshRate;
+                else puts("Error setting framerate");
+            }
             success=sensor->readFrame(rawFrame);
             if(success==false) puts("Error reading frame");
         } while(success==false);
@@ -356,6 +319,8 @@ void Application::sensorThread()
             delete rawFrame; //Drop frame without leaking memory
         }
     }
+    iprintf("sensorThread min free stack %d\n",
+            MemoryProfiling::getAbsoluteFreeStack());
 }
 
 void Application::processThread()
@@ -375,4 +340,52 @@ void Application::processThread()
         auto t2=getTime();
         iprintf("process = %lld\n",t2-t1);
     }
+    iprintf("processThread min free stack %d\n",
+            MemoryProfiling::getAbsoluteFreeStack());
+}
+
+void Application::renderThread()
+{
+    while(!quit)
+    {
+        MLX90640Frame *processedFrame=nullptr;
+        processedFrameQueue.get(processedFrame);
+        if(processedFrame==nullptr) continue; //Happens on shutdown
+        auto t1 = getTime();
+        bool smallCached=small; //Cache now if the main thread changes it
+        if(smallCached==false) renderer->render(processedFrame);
+        else renderer->renderSmall(processedFrame);
+        delete processedFrame;
+        auto t2 = getTime();
+        {
+            DrawingContext dc(display);
+            if(smallCached==false)
+            {
+                //For point coordinates see ui-mockup-main-screen.png
+                renderer->draw(dc,Point(1,13));
+                drawTemperature(dc,Point(0,114),Point(16,122),tahoma,
+                                renderer->minTemperature());
+                drawTemperature(dc,Point(99,114),Point(115,122),tahoma,
+                                renderer->maxTemperature());
+                drawTemperature(dc,Point(38,108),Point(70,122),droid21,
+                                renderer->crosshairTemperature());
+                Color *buffer=dc.getScanLineBuffer();
+                renderer->legend(buffer,dc.getWidth());
+                for(int y=124;y<=127;y++)
+                    dc.scanLineBuffer(Point(0,y),dc.getWidth());
+            } else {
+                //For point coordinates see ui-mockup-menu-screen.png
+                renderer->drawSmall(dc,Point(1,1));
+                drawTemperature(dc,Point(96,12),Point(112,20),tahoma,
+                                renderer->maxTemperature());
+                drawTemperature(dc,Point(96,25),Point(112,33),tahoma,
+                                renderer->minTemperature());
+            }
+        }
+        auto t3 = getTime();
+        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
+        //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
+    }
+    iprintf("renderThread min free stack %d\n",
+            MemoryProfiling::getAbsoluteFreeStack());
 }

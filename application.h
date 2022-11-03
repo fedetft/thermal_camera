@@ -59,16 +59,12 @@ private:
     Application& operator=(const Application&)=delete;
     
     void bootMessage();
-
-    ButtonPressed mainScreen();
     
     void drawStaticPartOfMainScreen();
 
-    void menuScreen();
-
-    ButtonPressed menuScreenLoop();
-
     void drawStaticPartOfMenuScreen();
+
+    void menuScreen();
 
     void drawBatteryIcon(mxgui::DrawingContext& dc);
 
@@ -76,12 +72,12 @@ private:
                          mxgui::Font f, short temperature);
 
     ButtonPressed checkButtons();
-
-    void setFrameRate(int fr);
     
     void sensorThread();
     
     void processThread();
+
+    void renderThread();
     
     static inline unsigned short to565(unsigned short r, unsigned short g, unsigned short b)
     {
@@ -91,6 +87,7 @@ private:
     mxgui::Display& display;
     ButtonEdgeDetector upButton;
     ButtonEdgeDetector onButton;
+    int prevBatteryVoltage=42; //4.2V
     std::unique_ptr<miosix::I2C1Master> i2c;
     std::unique_ptr<MLX90640> sensor;
     std::unique_ptr<ThermalImageRenderer> renderer;
@@ -102,5 +99,6 @@ private:
     Options options;
     miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
     miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
+    bool small=false;
     bool quit=false;
 };
