@@ -27,78 +27,19 @@
 
 #pragma once
 
-#include <memory>
-#include <miosix.h>
-#include <mxgui/display.h>
-#include <drivers/stm32f2_f4_i2c.h>
-#include <drivers/mlx90640.h>
-#include <drivers/hwmapping.h>
-#include <drivers/edge_detector.h>
-#include <renderer.h>
-
-enum class ButtonPressed
-{
-    None,
-    Up,
-    On
-};
+/**
+ * Try to load valid options from FLASH
+ * If no valid options found, the options pointer is not modified. This is
+ * deliberate as it allows to have the options pointer pre-initialized to
+ * default values.
+ * \param options pointer to options data structure
+ * \param data options data structure size, must be less than 256 bytes
+ */
+void loadOptions(void *options, int optionsSize);
 
 /**
- * The thermal camera application logic lives here
+ * Try to save options to FLASH. May fail in case of hardware errors.
+ * \param options pointer to options data structure
+ * \param data options data structure size, must be less than 256 bytes
  */
-class Application
-{
-public:
-    
-    Application(mxgui::Display& display);
-
-    void run();
-    
-private:
-    Application(const Application&)=delete;
-    Application& operator=(const Application&)=delete;
-    
-    void bootMessage();
-    
-    void drawStaticPartOfMainScreen();
-
-    void drawStaticPartOfMenuScreen();
-
-    void menuScreen();
-
-    void drawBatteryIcon(mxgui::DrawingContext& dc);
-
-    void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,
-                         mxgui::Font f, short temperature);
-
-    ButtonPressed checkButtons();
-    
-    void sensorThread();
-    
-    void processThread();
-
-    void renderThread();
-    
-    static inline unsigned short to565(unsigned short r, unsigned short g, unsigned short b)
-    {
-        return ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | ((b & 0b11111000) >> 3);
-    }
-
-    mxgui::Display& display;
-    ButtonEdgeDetector upButton;
-    ButtonEdgeDetector onButton;
-    int prevBatteryVoltage=42; //4.2V
-    std::unique_ptr<miosix::I2C1Master> i2c;
-    std::unique_ptr<MLX90640> sensor;
-    std::unique_ptr<ThermalImageRenderer> renderer;
-    struct Options
-    {
-        int frameRate=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
-        float emissivity=0.95f;
-    };
-    Options options;
-    miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
-    miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
-    bool small=false;
-    bool quit=false;
-};
+void saveOptions(void *options, int optionsSize);

@@ -29,6 +29,7 @@
 #include <thread>
 #include <mxgui/misc_inst.h>
 #include <drivers/misc.h>
+#include <drivers/options_save.h>
 #include <images/batt100icon.h>
 #include <images/batt75icon.h>
 #include <images/batt50icon.h>
@@ -60,7 +61,7 @@ Application::Application(Display& display)
       sensor(make_unique<MLX90640>(i2c.get())),
       renderer(make_unique<ThermalImageRenderer>())
 {
-    // TODO load options from flash
+    loadOptions(&options,sizeof(options));
     if(sensor->setRefresh(refreshFromInt(options.frameRate))==false)
         puts("Error setting framerate");
 }
@@ -213,7 +214,7 @@ void Application::menuScreen()
                     case EmissivitySelected: entry=Emissivity; break;
                     case FrameRate: entry=FrameRateSelected; break;
                     case FrameRateSelected: entry=FrameRate; break;
-                    case SaveChanges: /* TODO save options to flash */ break;
+                    case SaveChanges: saveOptions(&options,sizeof(options)); break;
                     case Back:
                         small=false;
                         return;

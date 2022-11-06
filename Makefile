@@ -19,7 +19,8 @@ SUBDIRS := $(KPATH) mxgui
 SRC :=                                             \
 main.cpp application.cpp renderer.cpp colormap.cpp \
 drivers/display_er_oledm015.cpp drivers/misc.cpp   \
-drivers/mlx90640.cpp drivers/MLX90640_API.cpp
+drivers/mlx90640.cpp drivers/MLX90640_API.cpp      \
+drivers/flash.cpp drivers/options_save.cpp
 
 IMG :=  \
 images/batt0icon.png \
