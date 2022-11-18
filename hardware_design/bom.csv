@@ -7,7 +7,7 @@ Qty,Reference(s),Value,Footprint
 7,"C3, C5, C8, C9, C10, C14, C16",100n,Capacitor_SMD:C_0603_1608Metric
 2,"C6, C7",2u2,Capacitor_SMD:C_0805_2012Metric
 2,"C12, C13",10p,Capacitor_SMD:C_0603_1608Metric
-1,D1,BAT54A,Package_TO_SOT_SMD:SOT-23
+1,D1,BAT54A,SOT-23
 1,D2,LED,LED_SMD:LED_0603_1608Metric
 1,J1,4 pin serial/programming connector,Connector_PinSocket_2.54mm
 0,J2,Do not fit,
