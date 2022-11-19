@@ -20,6 +20,6 @@ Qty,Reference(s),Value,Footprint
 1,U2,LP2981-3.3,SOT-23-5
 1,U3,TP4056,SOIC-8-1EP
 1,U4,W25Q64,SOIC-8W
-1,U5,MLX90640,NOTE: Requires bending pins for right angle mount
+1,U5,MLX90640-BAB,NOTE: Requires bending pins for right angle mount
 1,Y1,8MHz,ABRACON ABM3B-8.000MHZ-10-1-U-T
 1,"B+1, B-1",LiPo battery 1Ah,https://www.ebay.com/itm/123867825568
