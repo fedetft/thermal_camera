@@ -7,3 +7,29 @@ main.map
 images/*.h
 images/*.cpp
 
+### https://github.com/github/gitignore/blob/main/KiCad.gitignore
+# For PCBs designed using KiCad: https://www.kicad.org/
+# Format documentation: https://kicad.org/help/file-formats/
+
+# Temporary files
+hardware_design/*.000
+hardware_design/*.bak
+hardware_design/*.bck
+hardware_design/*.kicad_pcb-bak
+hardware_design/*.kicad_sch-bak
+hardware_design/*-backups
+hardware_design/*.kicad_prl
+hardware_design/*.sch-bak
+hardware_design/*~
+hardware_design/_autosave-*
+hardware_design/*.tmp
+hardware_design/*-save.pro
+hardware_design/*-save.kicad_pcb
+hardware_design/fp-info-cache
+
+# Netlist files (exported from Eeschema)
+hardware_design/*.net
+
+# Autorouter files (exported from Pcbnew)
+hardware_design/*.dsn
+hardware_design/*.ses
