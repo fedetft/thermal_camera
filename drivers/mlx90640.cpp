@@ -29,6 +29,7 @@
 #include <cstdio>
 #include <thread>
 #include <stdexcept>
+#include <chrono>
 #include <interfaces/endianness.h>
 
 using namespace std;
@@ -50,6 +51,9 @@ MLX90640::MLX90640(I2C1Master *i2c, unsigned char devAddr)
 {
     const unsigned int eepromSize=832;
     unsigned short eeprom[eepromSize]; // Heavy object! ~1.7 KByte
+    // Wait 80ms as recommended by the datasheet.
+    // If we don't do this, on some sensors the EEPROM readout might be glitched
+    std::this_thread::sleep_for(80ms);
     if(read(0x2400,eepromSize,eeprom)==false || MLX90640_ExtractParameters(eeprom,&params))
         throw runtime_error("EEPROM failure");
     if(setRefresh(MLX90640Refresh::R1)==false)
