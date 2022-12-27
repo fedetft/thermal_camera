@@ -28,7 +28,7 @@
 #pragma once
 
 #include <mxgui/display.h>
-#include <drivers/mlx90640.h>
+#include "drivers/mlx90640frame.h"
 
 /**
  * This class contains code to convert an array of temperatures into a
