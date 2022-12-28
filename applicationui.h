@@ -137,6 +137,7 @@ public:
         #endif
         {
             mxgui::DrawingContext dc(display);
+            dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
             if(smallCached==false)
             {
                 //For mxgui::point coordinates see ui-mockup-main-screen.png
@@ -252,78 +253,71 @@ private:
         drawStaticPartOfMenuScreen();
         enum MenuEntry
         {
-            Emissivity         = 0,
-            EmissivitySelected = 0 | 16,
-            FrameRate          = 1,
-            FrameRateSelected  = 1 | 16,
-            SaveChanges        = 2,
-            Back               = 3
+            Back,
+            Emissivity,
+            FrameRate,
+            SaveChanges,
+            NumEntries
         };
-        const int numEntries=4;
-        int entry=Emissivity;
-        const char labels[numEntries][16]=
-        {
-            " Emissivity ",
-            " Frame rate ",
-            " Save changes ",
-            " Back "
-        };
+        int entry=Back;
         for(;;)
         {
             {
+                const mxgui::Color selectedBGColor = mxgui::Color(to565(255,128,0));
+                const mxgui::Color selectedFGColor = mxgui::black;
+                const mxgui::Color unselectedBGColor = mxgui::black;
+                const mxgui::Color unselectedFGColor = mxgui::white;
+                const mxgui::Font& menuFont = smallFont;
+                const auto fontHeight = smallFont.getHeight();
                 mxgui::DrawingContext dc(display);
-                auto menuEntryColor=[&](bool active)
+                dc.setFont(menuFont);
+                auto drawMenuItem=[&](short i, const char *label, const char *value="")
                 {
-                    if(active) dc.setTextColor(std::make_pair(mxgui::black,to565(255,128,0)));
-                    else dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
+                    short top = 50+i*fontHeight;
+                    if (i==entry) 
+                    {
+                        dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
+                        dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
+                    }
+                    else 
+                    {
+                        dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),unselectedBGColor);
+                        dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
+                    }
+                    dc.write(mxgui::Point(3,top),label);
+                    dc.write(mxgui::Point(75,top),value);
                 };
-                dc.setFont(smallFont);
-                for(int i=0;i<numEntries;i++)
-                {
-                    menuEntryColor(entry==i);
-                    dc.write(mxgui::Point(0,50+i*smallFont.getHeight()),labels[i]);
-                }
-                menuEntryColor(entry==EmissivitySelected);
-                dc.write(mxgui::Point(75,50+0*smallFont.getHeight()),
-                        std::string(" ")+std::to_string(options.emissivity).substr(0,4));
-                menuEntryColor(entry==FrameRateSelected);
-                dc.write(mxgui::Point(75,50+1*smallFont.getHeight()),
-                        std::string(" ")+std::to_string(options.frameRate)+"  ");
-                dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
+                char buffer[8];
+                drawMenuItem(Back, "Back");
+                snprintf(buffer, 8, "%.2f", options.emissivity);
+                drawMenuItem(Emissivity, "Emissivity", buffer);
+                sniprintf(buffer, 8, "%d", options.frameRate);
+                drawMenuItem(FrameRate, "Frame rate", buffer);
+                drawMenuItem(SaveChanges, "Save changes");
             }
             switch(ioHandler.checkButtons())
             {
                 case ButtonPressed::On:
                     switch(entry)
                     {
-                        case Emissivity: entry=EmissivitySelected; break;
-                        case EmissivitySelected: entry=Emissivity; break;
-                        case FrameRate: entry=FrameRateSelected; break;
-                        case FrameRateSelected: entry=FrameRate; break;
-                        case SaveChanges: ioHandler.saveOptions(options); break;
+                        case Emissivity:
+                            if(options.emissivity>0.925) options.emissivity=0.05;
+                            else options.emissivity+=0.05;
+                            break;
+                        case FrameRate: 
+                            if(options.frameRate>=8) options.frameRate=1;
+                            else options.frameRate*=2;
+                            break;
+                        case SaveChanges:
+                            ioHandler.saveOptions(options);
+                            break;
                         case Back:
                             small=false;
                             return;
                     }
                     break;
                 case ButtonPressed::Up:
-                    switch(entry)
-                    {
-                        case EmissivitySelected:
-                            if(options.emissivity>0.925) options.emissivity=0.05;
-                            else options.emissivity+=0.05;
-                            break;
-                        case FrameRateSelected:
-                            if(options.frameRate>=8) options.frameRate=1;
-                            else options.frameRate*=2;
-                            break;
-                        case Back:
-                            entry=Emissivity;
-                            break;
-                        default:
-                            entry++;
-                            break;
-                    }
+                    entry=(entry+1)%NumEntries;
                     break;
                 default: break;
             }
