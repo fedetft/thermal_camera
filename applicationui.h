@@ -29,6 +29,7 @@
 
 #include "drivers/misc.h"
 #include "renderer.h"
+#include "edge_detector.h"
 #include "images/batt100icon.h"
 #include "images/batt75icon.h"
 #include "images/batt50icon.h"
@@ -47,11 +48,11 @@
 #define iprintf printf
 #endif
 
-enum class ButtonPressed
+struct ButtonState
 {
-    None,
-    Up,
-    On
+    bool up:1;
+    bool on:1;
+    ButtonState(int up, int on): up(up!=0), on(on!=0) {}
 };
 
 struct ApplicationOptions
@@ -63,7 +64,7 @@ struct ApplicationOptions
 class IOHandlerBase
 {
 public:
-    ButtonPressed checkButtons();
+    ButtonState checkButtons();
 
     BatteryLevel checkBatteryLevel();
 
@@ -87,15 +88,18 @@ public:
     ApplicationOptions options;
     Lifecycle lifecycle;
 
-    ApplicationUI(IOHandler& ioHandler, mxgui::Display& display)
+    ApplicationUI(IOHandler& ioHandler, mxgui::Display& display, ButtonState initialBtnState)
         : display(display), renderer(std::make_unique<ThermalImageRenderer>()),
-        ioHandler(ioHandler)
+        ioHandler(ioHandler), upBtn(initialBtnState.up), onBtn(initialBtnState.on)
     {
         enterBootMessage();
     }
 
     void update()
     {
+        ButtonState btns = ioHandler.checkButtons();
+        upBtn.update(btns.up);
+        onBtn.update(btns.on);
         switch (state) {
             case BootMsg: updateBootMessage(); break;
             case Main: updateMain(); break;
@@ -158,6 +162,11 @@ private:
     const mxgui::Font& smallFont = mxgui::tahoma;
     const mxgui::Font& largeFont = mxgui::droid21;
 
+    mxgui::Display& display;
+    std::unique_ptr<ThermalImageRenderer> renderer;
+    IOHandler& ioHandler;
+    ButtonEdgeDetector<true> upBtn;
+    ButtonEdgeDetector<true> onBtn;
     enum State
     {
         BootMsg,
@@ -166,9 +175,6 @@ private:
         Shutdown
     };
     State state = State::BootMsg;
-    mxgui::Display& display;
-    std::unique_ptr<ThermalImageRenderer> renderer;
-    IOHandler& ioHandler;
 
     void enterBootMessage()
     {
@@ -238,16 +244,8 @@ private:
 
     void updateMain()
     {
-        switch(ioHandler.checkButtons())
-        {
-            case ButtonPressed::On:
-                enterShutdown();
-                break;
-            case ButtonPressed::Up:
-                enterMenu();
-                break;
-            default: break;
-        }
+        if(onBtn.getLongPressEvent()) enterShutdown();
+        else if(upBtn.getDownEvent()) enterMenu();
     }
 
     void drawStaticPartOfMenuScreen(mxgui::DrawingContext& dc)
@@ -328,38 +326,34 @@ private:
     void updateMenu()
     {
         mxgui::DrawingContext dc(display);
-        switch(ioHandler.checkButtons())
+        if (onBtn.getDownEvent())
         {
-            case ButtonPressed::On:
-                switch(menuEntry)
-                {
-                    case Emissivity:
-                        if(options.emissivity>0.925) options.emissivity=0.05;
-                        else options.emissivity+=0.05;
-                        drawMenuEntry(dc, Emissivity);
-                        break;
-                    case FrameRate: 
-                        if(options.frameRate>=8) options.frameRate=1;
-                        else options.frameRate*=2;
-                        drawMenuEntry(dc, FrameRate);
-                        break;
-                    case SaveChanges:
-                        ioHandler.saveOptions(options);
-                        break;
-                    case Back:
-                        enterMain();
-                        return;
-                }
-                break;
-            case ButtonPressed::Up:
-                {
-                    int oldEntry = menuEntry;
-                    menuEntry=(menuEntry+1)%NumEntries;
-                    drawMenuEntry(dc, oldEntry);
-                    drawMenuEntry(dc, menuEntry);
+            switch(menuEntry)
+            {
+                case Emissivity:
+                    if(options.emissivity>0.925) options.emissivity=0.05;
+                    else options.emissivity+=0.05;
+                    drawMenuEntry(dc, Emissivity);
                     break;
-                }
-            default: break;
+                case FrameRate: 
+                    if(options.frameRate>=8) options.frameRate=1;
+                    else options.frameRate*=2;
+                    drawMenuEntry(dc, FrameRate);
+                    break;
+                case SaveChanges:
+                    ioHandler.saveOptions(options);
+                    break;
+                case Back:
+                    enterMain();
+                    return;
+            }
+        }
+        else if(upBtn.getDownEvent())
+        {
+            int oldEntry = menuEntry;
+            menuEntry=(menuEntry+1)%NumEntries;
+            drawMenuEntry(dc, oldEntry);
+            drawMenuEntry(dc, menuEntry);
         }
     }
 

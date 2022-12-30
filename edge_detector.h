@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico                               *
+ *   Copyright (C) 2022 by Terraneo Federico and Daniele Cattaneo          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,24 +27,58 @@
 
 #pragma once
 
-#include <miosix.h>
+#include <chrono>
 
+template <bool activeLevel>
 class ButtonEdgeDetector
 {
 public:
-    ButtonEdgeDetector(miosix::GpioPin pin, int activeLevel=1)
-        : pin(pin), state(false), active(activeLevel==0) {}
+    ButtonEdgeDetector(bool initialState)
+        : state(initialState), longPressState(AlreadyTriggered) {}
+    
+    using clock = std::chrono::steady_clock;
 
-    bool pressed()
+    void update(bool newState)
     {
-        bool newState=pin.value() ^ active;
-        bool result = newState && state==false;
+        newState=newState^(!activeLevel);
+        down=(newState^state)&newState;
+        up=(newState^state)&state;
+        if (down) downTime=clock().now();
+        if (!newState) longPressState=Waiting;
+        else if (longPressState==Trigger) longPressState=AlreadyTriggered;
+        else if (longPressState==Waiting && (clock().now()-downTime)>=longPressWaitTime) longPressState=Trigger;
         state=newState;
-        return result;
+        //if (down) printf("%p down\n", this);
+        //if (up) printf("%p up\n", this);
+        //if (longPressState==Trigger) printf("%p long press\n", this);
+    }
+
+    bool getDownEvent()
+    {
+        return down;
+    }
+
+    bool getState()
+    {
+        return state;
+    }
+
+    bool getUpEvent()
+    {
+        return up;
+    }
+
+    bool getLongPressEvent()
+    {
+        return longPressState == Trigger;
     }
 
 private:
-    miosix::GpioPin pin;
+    const clock::duration longPressWaitTime = std::chrono::milliseconds(600);
+
     bool state;
-    bool active;
+    bool down, up;
+    clock::time_point downTime;
+    enum LongPressState { Waiting, Trigger, AlreadyTriggered };
+    LongPressState longPressState;
 };

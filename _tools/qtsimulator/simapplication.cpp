@@ -37,7 +37,7 @@ MLX90640Frame testFrame = { .temperature = {
 class ApplicationSimulator: IOHandlerBase
 {
 public:
-    ApplicationSimulator() : ui(*this, DisplayManager::instance().getDisplay()) {}
+    ApplicationSimulator() : ui(*this, DisplayManager::instance().getDisplay(), {false, false}) {}
 
     void run()
     {
@@ -49,23 +49,26 @@ public:
         }
     }
 
-    ButtonPressed checkButtons()
+    ButtonState checkButtons()
     {
         ui.drawFrame(&testFrame);
-        buttons = ButtonPressed::None;
         Event e;
         for (;;)
         {
             e=InputHandler::instance().popEvent();
             if(e.getEvent() == EventType::Default) break;
-            ButtonPressed flag;
             switch(e.getEvent())
             {
-                case EventType::ButtonA: flag = ButtonPressed::Up; break;
-                case EventType::ButtonB: flag = ButtonPressed::On; break;
+                case EventType::ButtonA:
+                    if (e.getDirection() == EventDirection::DOWN) buttons.up=true;
+                    else buttons.up=false;
+                    break;
+                case EventType::ButtonB:
+                    if (e.getDirection() == EventDirection::DOWN) buttons.on=true;
+                    else buttons.on=false;
+                    break;
                 default: continue;
             }
-            if (e.getDirection() == EventDirection::DOWN) buttons = flag;
         }
         return buttons;
     }
@@ -81,7 +84,7 @@ public:
     }
 
 private:
-    ButtonPressed buttons = ButtonPressed::None;
+    ButtonState buttons = ButtonState(0, 0);
     ApplicationUI<ApplicationSimulator> ui;
 };
 

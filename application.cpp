@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico                               *
+ *   Copyright (C) 2022 by Terraneo Federico and Daniele Cattaneo          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -55,8 +55,7 @@ using namespace mxgui;
 //
 
 Application::Application(Display& display)
-    : display(display), ui(*this, display),
-      upButton(up_btn::getPin(),0), onButton(on_btn::getPin(),1),
+    : display(display), ui(*this, display, ButtonState(up_btn::value(),on_btn::value())),
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),400)),
       sensor(make_unique<MLX90640>(i2c.get()))
 {
@@ -67,7 +66,6 @@ Application::Application(Display& display)
 
 void Application::run()
 {
-    onButton.pressed(); upButton.pressed(); //Discard buttons already pressed at this point
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
 
@@ -91,13 +89,10 @@ void Application::run()
     rt.join();
 }
 
-ButtonPressed Application::checkButtons()
+ButtonState Application::checkButtons()
 {
-    bool on=onButton.pressed();
-    bool up=upButton.pressed();
-    if(on) return ButtonPressed::On;
-    if(up) return ButtonPressed::Up;
-    return ButtonPressed::None;
+    // up button is inverted
+    return ButtonState(1^up_btn::value(),on_btn::value());
 }
 
 BatteryLevel Application::checkBatteryLevel()

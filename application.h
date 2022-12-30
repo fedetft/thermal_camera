@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico                               *
+ *   Copyright (C) 2022 by Terraneo Federico and Daniele Cattaneo          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -33,7 +33,6 @@
 #include <drivers/stm32f2_f4_i2c.h>
 #include <drivers/mlx90640.h>
 #include <drivers/hwmapping.h>
-#include <drivers/edge_detector.h>
 #include "renderer.h"
 #include "applicationui.h"
 
@@ -48,7 +47,7 @@ public:
 
     void run();
 
-    ButtonPressed checkButtons();
+    ButtonState checkButtons();
 
     BatteryLevel checkBatteryLevel();
 
@@ -70,8 +69,6 @@ private:
 
     mxgui::Display& display;
     UI ui;
-    ButtonEdgeDetector upButton;
-    ButtonEdgeDetector onButton;
     int prevBatteryVoltage=42; //4.2V
     std::unique_ptr<miosix::I2C1Master> i2c;
     std::unique_ptr<MLX90640> sensor;
