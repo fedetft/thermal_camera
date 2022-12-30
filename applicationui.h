@@ -65,6 +65,8 @@ class IOHandlerBase
 public:
     ButtonPressed checkButtons();
 
+    BatteryLevel checkBatteryLevel();
+
     void saveOptions(ApplicationOptions& options);
 };
 
@@ -101,6 +103,7 @@ public:
             case Shutdown:
             default: break;
         }
+        if (state == Main || state == Menu) drawBatteryIcon();
     }
 
     void drawFrame(MLX90640Frame *processedFrame)
@@ -148,20 +151,6 @@ public:
         //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
     }
 
-    void drawBatteryIcon(BatteryLevel level)
-    {
-        mxgui::DrawingContext dc(display);
-        mxgui::Point batteryIconPoint(104,0);
-        switch(level)
-        {
-            case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
-            case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
-            case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
-            case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
-            case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
-        }
-    }
-
 private:
     ApplicationUI(const ApplicationUI&)=delete;
     ApplicationUI& operator=(const ApplicationUI&)=delete;
@@ -198,6 +187,20 @@ private:
         y+=4;
         dc.setFont(smallFont);
         dc.write(mxgui::Point((width-s1pix)/2,y),s1);
+    }
+
+    void drawBatteryIcon()
+    {
+        mxgui::DrawingContext dc(display);
+        mxgui::Point batteryIconPoint(104,0);
+        switch(ioHandler.checkBatteryLevel())
+        {
+            case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
+            case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
+            case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
+            case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
+            case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
+        }
     }
 
     void updateBootMessage()

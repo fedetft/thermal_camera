@@ -51,7 +51,6 @@ public:
 
     ButtonPressed checkButtons()
     {
-        ui.drawBatteryIcon(BatteryLevel::B50);
         ui.drawFrame(&testFrame);
         buttons = ButtonPressed::None;
         Event e;
@@ -69,6 +68,11 @@ public:
             if (e.getDirection() == EventDirection::DOWN) buttons = flag;
         }
         return buttons;
+    }
+
+    BatteryLevel checkBatteryLevel()
+    {
+        return BatteryLevel::B50;
     }
 
     void saveOptions(ApplicationOptions& options)

@@ -50,6 +50,8 @@ public:
 
     ButtonPressed checkButtons();
 
+    BatteryLevel checkBatteryLevel();
+
     void saveOptions(ApplicationOptions& options);
     
 private:

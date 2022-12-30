@@ -80,7 +80,6 @@ void Application::run()
     
     ui.lifecycle = UI::Ready;
     while (ui.lifecycle != UI::Quit) {
-        drawBatteryIcon(); //Here for convenience
         ui.update();
         Thread::sleep(80);
     }
@@ -92,13 +91,6 @@ void Application::run()
     rt.join();
 }
 
-void Application::drawBatteryIcon()
-{
-    Point batteryIconPoint(104,0);
-    prevBatteryVoltage=min(prevBatteryVoltage,getBatteryVoltage());
-    ui.drawBatteryIcon(batteryLevel(prevBatteryVoltage));
-}
-
 ButtonPressed Application::checkButtons()
 {
     bool on=onButton.pressed();
@@ -106,6 +98,12 @@ ButtonPressed Application::checkButtons()
     if(on) return ButtonPressed::On;
     if(up) return ButtonPressed::Up;
     return ButtonPressed::None;
+}
+
+BatteryLevel Application::checkBatteryLevel()
+{
+    prevBatteryVoltage=min(prevBatteryVoltage,getBatteryVoltage());
+    return batteryLevel(prevBatteryVoltage);
 }
 
 void Application::saveOptions(ApplicationOptions& options)
