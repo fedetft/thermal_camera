@@ -76,50 +76,30 @@ template<class IOHandler>
 class ApplicationUI
 {
 public:
+    enum Lifecycle
+    {
+        Boot,
+        Ready,
+        Quit
+    };
     ApplicationOptions options;
-    bool quit=false;
+    Lifecycle lifecycle;
 
     ApplicationUI(IOHandler& ioHandler, mxgui::Display& display)
         : display(display), renderer(std::make_unique<ThermalImageRenderer>()),
         ioHandler(ioHandler)
     {
+        enterBootMessage();
     }
 
-    void run()
+    void update()
     {
-        mainScreen();
-    }
-
-    void drawBootMessage()
-    {
-        const char s0[]="Miosix";
-        const char s1[]="Thermal camera";
-        const int s0pix=miosixlogoicon.getWidth()+1+largeFont.calculateLength(s0);
-        const int s1pix=smallFont.calculateLength(s1);
-        mxgui::DrawingContext dc(display);
-        dc.setFont(largeFont);
-        int width=dc.getWidth();
-        int y=10;
-        dc.drawImage(mxgui::Point((width-s0pix)/2,y),miosixlogoicon);
-        dc.write(mxgui::Point((width-s0pix)/2+miosixlogoicon.getWidth()+1,y),s0);
-        y+=dc.getFont().getHeight();
-        dc.line(mxgui::Point((width-s1pix)/2,y),mxgui::Point((width-s1pix)/2+s1pix,y),mxgui::white);
-        y+=4;
-        dc.setFont(smallFont);
-        dc.write(mxgui::Point((width-s1pix)/2,y),s1);
-    }
-
-    void drawBatteryIcon(BatteryLevel level)
-    {
-        mxgui::DrawingContext dc(display);
-        mxgui::Point batteryIconPoint(104,0);
-        switch(level)
-        {
-            case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
-            case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
-            case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
-            case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
-            case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
+        switch (state) {
+            case BootMsg: updateBootMessage(); break;
+            case Main: updateMain(); break;
+            case Menu: updateMenu(); break;
+            case Shutdown:
+            default: break;
         }
     }
 
@@ -129,7 +109,7 @@ public:
         #ifdef _MIOSIX
         auto t1 = miosix::getTime();
         #endif
-        bool smallCached=small; //Cache now if the main thread changes it
+        bool smallCached=(state == Menu); //Cache now if the main thread changes it
         if(smallCached==false) renderer->render(processedFrame);
         else renderer->renderSmall(processedFrame);
         #ifdef _MIOSIX
@@ -167,10 +147,71 @@ public:
         #endif
         //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
     }
-    
+
+    void drawBatteryIcon(BatteryLevel level)
+    {
+        mxgui::DrawingContext dc(display);
+        mxgui::Point batteryIconPoint(104,0);
+        switch(level)
+        {
+            case BatteryLevel::B100: dc.drawImage(batteryIconPoint,batt100icon); break;
+            case BatteryLevel::B75:  dc.drawImage(batteryIconPoint,batt75icon); break;
+            case BatteryLevel::B50:  dc.drawImage(batteryIconPoint,batt50icon); break;
+            case BatteryLevel::B25:  dc.drawImage(batteryIconPoint,batt25icon); break;
+            case BatteryLevel::B0:   dc.drawImage(batteryIconPoint,batt0icon); break;
+        }
+    }
+
 private:
     ApplicationUI(const ApplicationUI&)=delete;
     ApplicationUI& operator=(const ApplicationUI&)=delete;
+
+    const mxgui::Font& smallFont = mxgui::tahoma;
+    const mxgui::Font& largeFont = mxgui::droid21;
+
+    enum State
+    {
+        BootMsg,
+        Main,
+        Menu,
+        Shutdown
+    };
+    State state = State::BootMsg;
+    mxgui::Display& display;
+    std::unique_ptr<ThermalImageRenderer> renderer;
+    IOHandler& ioHandler;
+
+    void enterBootMessage()
+    {
+        const char s0[]="Miosix";
+        const char s1[]="Thermal camera";
+        const int s0pix=miosixlogoicon.getWidth()+1+largeFont.calculateLength(s0);
+        const int s1pix=smallFont.calculateLength(s1);
+        mxgui::DrawingContext dc(display);
+        dc.setFont(largeFont);
+        int width=dc.getWidth();
+        int y=10;
+        dc.drawImage(mxgui::Point((width-s0pix)/2,y),miosixlogoicon);
+        dc.write(mxgui::Point((width-s0pix)/2+miosixlogoicon.getWidth()+1,y),s0);
+        y+=dc.getFont().getHeight();
+        dc.line(mxgui::Point((width-s1pix)/2,y),mxgui::Point((width-s1pix)/2+s1pix,y),mxgui::white);
+        y+=4;
+        dc.setFont(smallFont);
+        dc.write(mxgui::Point((width-s1pix)/2,y),s1);
+    }
+
+    void updateBootMessage()
+    {
+        if (lifecycle == Ready) {
+            enterMain();
+        }
+    }
+
+    void enterMain()
+    {
+        state = Main;
+        drawStaticPartOfMainScreen();
+    }
 
     void drawStaticPartOfMainScreen()
     {
@@ -192,9 +233,22 @@ private:
         dc.drawImage(mxgui::Point(72,109),largecelsiusicon);
     }
 
-    void drawStaticPartOfMenuScreen()
+    void updateMain()
     {
-        mxgui::DrawingContext dc(display);
+        switch(ioHandler.checkButtons())
+        {
+            case ButtonPressed::On:
+                enterShutdown();
+                break;
+            case ButtonPressed::Up:
+                enterMenu();
+                break;
+            default: break;
+        }
+    }
+
+    void drawStaticPartOfMenuScreen(mxgui::DrawingContext& dc)
+    {
         dc.clear(mxgui::black);
         //For mxgui::point coordinates see ui-mockup-menu-screen.png
         dc.setFont(smallFont);
@@ -207,6 +261,112 @@ private:
         dc.line(mxgui::Point(1,0),mxgui::Point(64,0),darkGrey);
         dc.line(mxgui::Point(1,48),mxgui::Point(64,48),lightGrey);
         dc.line(mxgui::Point(64,1),mxgui::Point(64,47),lightGrey);
+    }
+
+    enum MenuEntry
+    {
+        Back = 0,
+        Emissivity,
+        FrameRate,
+        SaveChanges,
+        NumEntries
+    };
+    int menuEntry;
+
+    void enterMenu()
+    {
+        state = Menu;
+        menuEntry = Back;
+        mxgui::DrawingContext dc(display);
+        drawStaticPartOfMenuScreen(dc);
+        for (int i=0; i<NumEntries; i++) drawMenuEntry(dc, i);
+    }
+
+    void _drawMenuEntry(mxgui::DrawingContext& dc, int i, const char *label, const char *value="")
+    {
+        const mxgui::Color selectedBGColor = mxgui::Color(to565(255,128,0));
+        const mxgui::Color selectedFGColor = mxgui::black;
+        const mxgui::Color unselectedBGColor = mxgui::black;
+        const mxgui::Color unselectedFGColor = mxgui::white;
+        const auto fontHeight = dc.getFont().getHeight();
+        short top = 50+i*fontHeight;
+        if (i==menuEntry) 
+        {
+            dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
+            dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
+        }
+        else 
+        {
+            dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),unselectedBGColor);
+            dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
+        }
+        dc.write(mxgui::Point(3,top),label);
+        dc.write(mxgui::Point(75,top),value);
+    }
+
+    void drawMenuEntry(mxgui::DrawingContext& dc, int id)
+    {
+        dc.setFont(smallFont);
+        char buffer[8];
+        switch (id) {
+            case Back: _drawMenuEntry(dc, Back, "Back"); break;
+            case Emissivity:
+                snprintf(buffer, 8, "%.2f", options.emissivity);
+                _drawMenuEntry(dc, Emissivity, "Emissivity", buffer);
+                break;
+            case FrameRate:
+                sniprintf(buffer, 8, "%d", options.frameRate);
+                _drawMenuEntry(dc, FrameRate, "Frame rate", buffer);
+                break;
+            case SaveChanges: _drawMenuEntry(dc, SaveChanges, "Save changes"); break;
+        }
+    }
+
+    void updateMenu()
+    {
+        mxgui::DrawingContext dc(display);
+        switch(ioHandler.checkButtons())
+        {
+            case ButtonPressed::On:
+                switch(menuEntry)
+                {
+                    case Emissivity:
+                        if(options.emissivity>0.925) options.emissivity=0.05;
+                        else options.emissivity+=0.05;
+                        drawMenuEntry(dc, Emissivity);
+                        break;
+                    case FrameRate: 
+                        if(options.frameRate>=8) options.frameRate=1;
+                        else options.frameRate*=2;
+                        drawMenuEntry(dc, FrameRate);
+                        break;
+                    case SaveChanges:
+                        ioHandler.saveOptions(options);
+                        break;
+                    case Back:
+                        enterMain();
+                        return;
+                }
+                break;
+            case ButtonPressed::Up:
+                {
+                    int oldEntry = menuEntry;
+                    menuEntry=(menuEntry+1)%NumEntries;
+                    drawMenuEntry(dc, oldEntry);
+                    drawMenuEntry(dc, menuEntry);
+                    break;
+                }
+            default: break;
+        }
+    }
+
+    void enterShutdown()
+    {
+        state = Shutdown;
+        lifecycle = Quit;
+        #ifdef _MIOSIX
+        miosix::MemoryProfiling::print();
+        #endif
     }
 
     void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,
@@ -225,115 +385,9 @@ private:
         dc.clippedWrite(a,a,b,line);
     }
 
-    void mainScreen()
-    {
-        drawStaticPartOfMainScreen();
-        while(quit==false)
-        {
-            switch(ioHandler.checkButtons())
-            {
-                case ButtonPressed::On:
-                    #ifdef _MIOSIX
-                    miosix::MemoryProfiling::print();
-                    #endif
-                    quit=true;
-                    break;
-                case ButtonPressed::Up:
-                    menuScreen();
-                    drawStaticPartOfMainScreen();
-                    break;
-                default: break;
-            }
-        }
-    }
-
-    void menuScreen()
-    {
-        small=true;
-        drawStaticPartOfMenuScreen();
-        enum MenuEntry
-        {
-            Back,
-            Emissivity,
-            FrameRate,
-            SaveChanges,
-            NumEntries
-        };
-        int entry=Back;
-        for(;;)
-        {
-            {
-                const mxgui::Color selectedBGColor = mxgui::Color(to565(255,128,0));
-                const mxgui::Color selectedFGColor = mxgui::black;
-                const mxgui::Color unselectedBGColor = mxgui::black;
-                const mxgui::Color unselectedFGColor = mxgui::white;
-                const mxgui::Font& menuFont = smallFont;
-                const auto fontHeight = smallFont.getHeight();
-                mxgui::DrawingContext dc(display);
-                dc.setFont(menuFont);
-                auto drawMenuItem=[&](short i, const char *label, const char *value="")
-                {
-                    short top = 50+i*fontHeight;
-                    if (i==entry) 
-                    {
-                        dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
-                        dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
-                    }
-                    else 
-                    {
-                        dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),unselectedBGColor);
-                        dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
-                    }
-                    dc.write(mxgui::Point(3,top),label);
-                    dc.write(mxgui::Point(75,top),value);
-                };
-                char buffer[8];
-                drawMenuItem(Back, "Back");
-                snprintf(buffer, 8, "%.2f", options.emissivity);
-                drawMenuItem(Emissivity, "Emissivity", buffer);
-                sniprintf(buffer, 8, "%d", options.frameRate);
-                drawMenuItem(FrameRate, "Frame rate", buffer);
-                drawMenuItem(SaveChanges, "Save changes");
-            }
-            switch(ioHandler.checkButtons())
-            {
-                case ButtonPressed::On:
-                    switch(entry)
-                    {
-                        case Emissivity:
-                            if(options.emissivity>0.925) options.emissivity=0.05;
-                            else options.emissivity+=0.05;
-                            break;
-                        case FrameRate: 
-                            if(options.frameRate>=8) options.frameRate=1;
-                            else options.frameRate*=2;
-                            break;
-                        case SaveChanges:
-                            ioHandler.saveOptions(options);
-                            break;
-                        case Back:
-                            small=false;
-                            return;
-                    }
-                    break;
-                case ButtonPressed::Up:
-                    entry=(entry+1)%NumEntries;
-                    break;
-                default: break;
-            }
-        }
-    }
-
     static inline unsigned short to565(unsigned short r, unsigned short g, unsigned short b)
     {
         return ((r & 0b11111000) << 8) | ((g & 0b11111100) << 3) | ((b & 0b11111000) >> 3);
     }
-
-    const mxgui::Font& smallFont = mxgui::tahoma;
-    const mxgui::Font& largeFont = mxgui::droid21;
-    mxgui::Display& display;
-    std::unique_ptr<ThermalImageRenderer> renderer;
-    IOHandler& ioHandler;
-    bool small=false;
 };
 

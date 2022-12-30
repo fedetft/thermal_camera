@@ -41,16 +41,18 @@ public:
 
     void run()
     {
-        ui.drawBootMessage();
         std::this_thread::sleep_for(std::chrono::milliseconds(700));
-        ui.run();
+        ui.lifecycle = ApplicationUI<ApplicationSimulator>::Ready;
+        while (ui.lifecycle != ApplicationUI<ApplicationSimulator>::Quit) {
+            ui.update();
+            std::this_thread::sleep_for(std::chrono::microseconds(16666));
+        }
     }
 
     ButtonPressed checkButtons()
     {
         ui.drawBatteryIcon(BatteryLevel::B50);
         ui.drawFrame(&testFrame);
-        std::this_thread::sleep_for(std::chrono::microseconds(16666)); // 60fps
         buttons = ButtonPressed::None;
         Event e;
         for (;;)

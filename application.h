@@ -56,6 +56,8 @@ private:
     Application(const Application&)=delete;
     Application& operator=(const Application&)=delete;
 
+    using UI = ApplicationUI<Application>;
+
     void drawBatteryIcon();
     
     void sensorThread();
@@ -65,6 +67,7 @@ private:
     void renderThread();
 
     mxgui::Display& display;
+    UI ui;
     ButtonEdgeDetector upButton;
     ButtonEdgeDetector onButton;
     int prevBatteryVoltage=42; //4.2V
@@ -72,5 +75,4 @@ private:
     std::unique_ptr<MLX90640> sensor;
     miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
     miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
-    ApplicationUI<Application> ui;
 };

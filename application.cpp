@@ -55,11 +55,10 @@ using namespace mxgui;
 //
 
 Application::Application(Display& display)
-    : display(display),
+    : display(display), ui(*this, display),
       upButton(up_btn::getPin(),0), onButton(on_btn::getPin(),1),
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),400)),
-      sensor(make_unique<MLX90640>(i2c.get())),
-      ui(*this, display)
+      sensor(make_unique<MLX90640>(i2c.get()))
 {
     loadOptions(&ui.options,sizeof(ui.options));
     if(sensor->setRefresh(refreshFromInt(ui.options.frameRate))==false)
@@ -68,7 +67,6 @@ Application::Application(Display& display)
 
 void Application::run()
 {
-    ui.drawBootMessage();
     onButton.pressed(); upButton.pressed(); //Discard buttons already pressed at this point
     thread st(&Application::sensorThread,this);
     thread pt(&Application::processThread,this);
@@ -80,7 +78,12 @@ void Application::run()
 
     thread rt(&Application::renderThread,this);
     
-    ui.run();
+    ui.lifecycle = UI::Ready;
+    while (ui.lifecycle != UI::Quit) {
+        drawBatteryIcon(); //Here for convenience
+        ui.update();
+        Thread::sleep(80);
+    }
     
     st.join();
     if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
@@ -98,15 +101,11 @@ void Application::drawBatteryIcon()
 
 ButtonPressed Application::checkButtons()
 {
-    for(;;)
-    {
-        drawBatteryIcon(); //Here for convenience
-        Thread::sleep(80);
-        bool on=onButton.pressed();
-        bool up=upButton.pressed();
-        if(on) return ButtonPressed::On;
-        if(up) return ButtonPressed::Up;
-    }
+    bool on=onButton.pressed();
+    bool up=upButton.pressed();
+    if(on) return ButtonPressed::On;
+    if(up) return ButtonPressed::Up;
+    return ButtonPressed::None;
 }
 
 void Application::saveOptions(ApplicationOptions& options)
@@ -119,7 +118,7 @@ void Application::sensorThread()
     //High priority for sensor read, prevents I2C reads from starving
     Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
     auto previousRefreshRate=sensor->getRefresh();
-    while(!ui.quit)
+    while(ui.lifecycle != UI::Quit)
     {
         auto *rawFrame=new MLX90640RawFrame;
         bool success;
@@ -152,7 +151,7 @@ void Application::processThread()
 {
     //Low priority for processing, prevents display writes from starving
     Thread::getCurrentThread()->setPriority(MAIN_PRIORITY-1);
-    while(!ui.quit)
+    while(ui.lifecycle != UI::Quit)
     {
         MLX90640RawFrame *rawFrame=nullptr;
         rawFrameQueue.get(rawFrame);
@@ -171,7 +170,7 @@ void Application::processThread()
 
 void Application::renderThread()
 {
-    while(!ui.quit)
+    while(ui.lifecycle != UI::Quit)
     {
         MLX90640Frame *processedFrame=nullptr;
         processedFrameQueue.get(processedFrame);
