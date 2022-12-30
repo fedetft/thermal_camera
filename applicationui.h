@@ -39,9 +39,10 @@
 #include "images/emissivityicon.h"
 #include "images/smallcelsiusicon.h"
 #include "images/largecelsiusicon.h"
-#include <memory>
 #include <mxgui/misc_inst.h>
 #include <mxgui/display.h>
+#include <memory>
+#include <mutex>
 
 #ifndef _MIOSIX
 #define sniprintf snprintf
@@ -110,49 +111,17 @@ public:
         if (state == Main || state == Menu) drawBatteryIcon();
     }
 
-    void drawFrame(MLX90640Frame *processedFrame)
+    void updateFrame(MLX90640Frame *processedFrame)
     {
-        if(processedFrame==nullptr) return; //Happens on shutdown
-        #ifdef _MIOSIX
-        auto t1 = miosix::getTime();
-        #endif
-        bool smallCached=(state == Menu); //Cache now if the main thread changes it
-        if(smallCached==false) renderer->render(processedFrame);
-        else renderer->renderSmall(processedFrame);
-        #ifdef _MIOSIX
-        auto t2 = miosix::getTime();
-        #endif
+        if (processedFrame==nullptr) return; //Happens on shutdown
+        lastFrameMutex.lock();
+        lastFrame.reset(processedFrame);
+        if (state == Main || state == Menu)
         {
             mxgui::DrawingContext dc(display);
-            dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
-            if(smallCached==false)
-            {
-                //For mxgui::point coordinates see ui-mockup-main-screen.png
-                renderer->draw(dc,mxgui::Point(1,13));
-                drawTemperature(dc,mxgui::Point(0,114),mxgui::Point(16,122),smallFont,
-                                renderer->minTemperature());
-                drawTemperature(dc,mxgui::Point(99,114),mxgui::Point(115,122),smallFont,
-                                renderer->maxTemperature());
-                drawTemperature(dc,mxgui::Point(38,108),mxgui::Point(70,122),largeFont,
-                                renderer->crosshairTemperature());
-                mxgui::Color *buffer=dc.getScanLineBuffer();
-                renderer->legend(buffer,dc.getWidth());
-                for(int y=124;y<=127;y++)
-                    dc.scanLineBuffer(mxgui::Point(0,y),dc.getWidth());
-            } else {
-                //For mxgui::point coordinates see ui-mockup-menu-screen.png
-                renderer->drawSmall(dc,mxgui::Point(1,1));
-                drawTemperature(dc,mxgui::Point(96,12),mxgui::Point(112,20),smallFont,
-                                renderer->maxTemperature());
-                drawTemperature(dc,mxgui::Point(96,25),mxgui::Point(112,33),smallFont,
-                                renderer->minTemperature());
-            }
+            drawFrame(dc);
         }
-        #ifdef _MIOSIX
-        auto t3 = miosix::getTime();
-        iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
-        #endif
-        //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
+        lastFrameMutex.unlock();
     }
 
 private:
@@ -164,6 +133,8 @@ private:
 
     mxgui::Display& display;
     std::unique_ptr<ThermalImageRenderer> renderer;
+    std::unique_ptr<MLX90640Frame> lastFrame;
+    std::recursive_mutex lastFrameMutex;
     IOHandler& ioHandler;
     ButtonEdgeDetector<true> upBtn;
     ButtonEdgeDetector<true> onBtn;
@@ -211,26 +182,18 @@ private:
 
     void updateBootMessage()
     {
-        if (lifecycle == Ready) {
-            enterMain();
-        }
+        if (lifecycle == Ready) enterMain();
     }
 
-    void enterMain()
+    void drawStaticPartOfMainScreen(mxgui::DrawingContext& dc)
     {
-        state = Main;
-        drawStaticPartOfMainScreen();
-    }
-
-    void drawStaticPartOfMainScreen()
-    {
-        mxgui::DrawingContext dc(display);
         dc.clear(mxgui::black);
         //For mxgui::point coordinates see ui-mockup-main-screen.png
         dc.drawImage(mxgui::Point(0,0),emissivityicon);
         char line[16];
         snprintf(line,sizeof(line),"%.2f  %2dfps ",options.emissivity,options.frameRate);
         dc.setFont(smallFont);
+        dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
         dc.write(mxgui::Point(11,0),line);
         const mxgui::Color darkGrey=to565(128,128,128), lightGrey=to565(192,192,192);
         dc.line(mxgui::Point(0,12),mxgui::Point(0,107),darkGrey);
@@ -240,6 +203,14 @@ private:
         dc.drawImage(mxgui::Point(18,115),smallcelsiusicon);
         dc.drawImage(mxgui::Point(117,115),smallcelsiusicon);
         dc.drawImage(mxgui::Point(72,109),largecelsiusicon);
+    }
+
+    void enterMain()
+    {
+        state = Main;
+        mxgui::DrawingContext dc(display);
+        drawStaticPartOfMainScreen(dc);
+        drawFrame(dc);
     }
 
     void updateMain()
@@ -280,6 +251,7 @@ private:
         menuEntry = Back;
         mxgui::DrawingContext dc(display);
         drawStaticPartOfMenuScreen(dc);
+        drawFrame(dc);
         for (int i=0; i<NumEntries; i++) drawMenuEntry(dc, i);
     }
 
@@ -295,9 +267,7 @@ private:
         {
             dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
             dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
-        }
-        else 
-        {
+        } else {
             dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),unselectedBGColor);
             dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
         }
@@ -364,6 +334,52 @@ private:
         #ifdef _MIOSIX
         miosix::MemoryProfiling::print();
         #endif
+    }
+
+    void drawFrame(mxgui::DrawingContext& dc)
+    {
+        lastFrameMutex.lock();
+        if (lastFrame.get()!=nullptr)
+        {
+            #ifdef _MIOSIX
+            auto t1 = miosix::getTime();
+            #endif
+            bool smallCached=(state == Menu); //Cache now if the main thread changes it
+            if(smallCached==false) renderer->render(lastFrame.get());
+            else renderer->renderSmall(lastFrame.get());
+            #ifdef _MIOSIX
+            auto t2 = miosix::getTime();
+            #endif
+            dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
+            if(smallCached==false)
+            {
+                //For mxgui::point coordinates see ui-mockup-main-screen.png
+                renderer->draw(dc,mxgui::Point(1,13));
+                drawTemperature(dc,mxgui::Point(0,114),mxgui::Point(16,122),smallFont,
+                                renderer->minTemperature());
+                drawTemperature(dc,mxgui::Point(99,114),mxgui::Point(115,122),smallFont,
+                                renderer->maxTemperature());
+                drawTemperature(dc,mxgui::Point(38,108),mxgui::Point(70,122),largeFont,
+                                renderer->crosshairTemperature());
+                mxgui::Color *buffer=dc.getScanLineBuffer();
+                renderer->legend(buffer,dc.getWidth());
+                for(int y=124;y<=127;y++)
+                    dc.scanLineBuffer(mxgui::Point(0,y),dc.getWidth());
+            } else {
+                //For mxgui::point coordinates see ui-mockup-menu-screen.png
+                renderer->drawSmall(dc,mxgui::Point(1,1));
+                drawTemperature(dc,mxgui::Point(96,12),mxgui::Point(112,20),smallFont,
+                                renderer->maxTemperature());
+                drawTemperature(dc,mxgui::Point(96,25),mxgui::Point(112,33),smallFont,
+                                renderer->minTemperature());
+            }
+            #ifdef _MIOSIX
+            auto t3 = miosix::getTime();
+            iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
+            #endif
+            //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
+        }
+        lastFrameMutex.unlock();
     }
 
     void drawTemperature(mxgui::DrawingContext& dc, mxgui::Point a, mxgui::Point b,

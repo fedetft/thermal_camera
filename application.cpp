@@ -167,8 +167,7 @@ void Application::renderThread()
     {
         MLX90640Frame *processedFrame=nullptr;
         processedFrameQueue.get(processedFrame);
-        ui.drawFrame(processedFrame);
-        delete processedFrame;
+        ui.updateFrame(processedFrame);
     }
     iprintf("renderThread min free stack %d\n",
             MemoryProfiling::getAbsoluteFreeStack());

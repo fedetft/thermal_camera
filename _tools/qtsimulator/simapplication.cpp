@@ -43,6 +43,7 @@ public:
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(700));
         ui.lifecycle = ApplicationUI<ApplicationSimulator>::Ready;
+        ui.updateFrame(new MLX90640Frame(testFrame));
         while (ui.lifecycle != ApplicationUI<ApplicationSimulator>::Quit) {
             ui.update();
             std::this_thread::sleep_for(std::chrono::microseconds(16666));
@@ -51,7 +52,6 @@ public:
 
     ButtonState checkButtons()
     {
-        ui.drawFrame(&testFrame);
         Event e;
         for (;;)
         {
