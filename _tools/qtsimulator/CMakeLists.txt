@@ -53,7 +53,8 @@ preprocess_png(IMG_OUT ${FOO_IMG})
 set(FOO_SRCS
     simapplication.cpp
     ../../renderer.cpp
-    ../../colormap.cpp)
+    ../../colormap.cpp
+    ../../textbox.cpp)
 
 # These are the sources of the mxgui library and the simulator
 set(LIB_SRCS
