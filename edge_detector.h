@@ -86,6 +86,11 @@ public:
         state=oldState=Up;
     }
 
+    bool getValue()
+    {
+        return value;
+    }
+
 private:
     const clock::duration longPressWaitTime = std::chrono::milliseconds(600);
 

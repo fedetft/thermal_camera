@@ -27,9 +27,10 @@
 
 #pragma once
 
-#include "drivers/misc.h"
 #include "renderer.h"
 #include "edge_detector.h"
+#include "textbox.h"
+#include "drivers/misc.h"
 #include "images/batt100icon.h"
 #include "images/batt75icon.h"
 #include "images/batt50icon.h"
@@ -169,6 +170,15 @@ private:
         y+=4;
         dc.setFont(smallFont);
         dc.write(mxgui::Point((width-s1pix)/2,y),s1);
+        #ifdef _MIOSIX
+        if (upBtn.getValue()) {
+            dc.setFont(mxgui::tahoma);
+            TextBox::draw(dc, mxgui::Point(0,dc.getHeight()-50), 
+                mxgui::Point(dc.getWidth()-1,dc.getHeight()-1),
+                miosix::getMiosixVersion(),
+                TextBox::TextOnlyBackground|TextBox::CharWrap|TextBox::LeftAlignment);
+        }
+        #endif
     }
 
     void drawBatteryIcon()
@@ -187,6 +197,7 @@ private:
 
     void updateBootMessage()
     {
+        if (upBtn.getValue()) return;
         if (lifecycle == Ready) enterMain();
     }
 
