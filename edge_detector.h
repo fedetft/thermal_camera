@@ -33,52 +33,64 @@ template <bool activeLevel>
 class ButtonEdgeDetector
 {
 public:
-    ButtonEdgeDetector(bool initialState)
-        : state(initialState), longPressState(AlreadyTriggered) {}
+    ButtonEdgeDetector(bool initialValue)
+        : value(initialValue), oldState(Up), state(Up) {}
     
     using clock = std::chrono::steady_clock;
 
-    void update(bool newState)
+    void update(bool newValue)
     {
-        newState=newState^(!activeLevel);
-        down=(newState^state)&newState;
-        up=(newState^state)&state;
-        if (down) downTime=clock().now();
-        if (!newState) longPressState=Waiting;
-        else if (longPressState==Trigger) longPressState=AlreadyTriggered;
-        else if (longPressState==Waiting && (clock().now()-downTime)>=longPressWaitTime) longPressState=Trigger;
-        state=newState;
-        //if (down) printf("%p down\n", this);
-        //if (up) printf("%p up\n", this);
-        //if (longPressState==Trigger) printf("%p long press\n", this);
+        newValue=newValue^(!activeLevel);
+        oldState=state;
+        switch(state)
+        {
+            case Up:
+                if(!value && newValue)
+                {
+                    state=Down;
+                    downTime=clock().now();
+                }
+                break;
+            case Down:
+                if (newValue && (clock().now()-downTime)>=longPressWaitTime) state=LongPress;
+                else if (value && !newValue) state=Up;
+                break;
+            case LongPress:
+                if (value && !newValue) state=Up;
+                break;
+            default: break;
+        }
+        value=newValue;
+        //if (state!=oldState && state==Down) printf("%p down\n", this);
+        //if (state!=oldState && state==Up) printf("%p up\n", this);
+        //if (state!=oldState && state==LongPress) printf("%p long press\n", this);
     }
 
     bool getDownEvent()
     {
-        return down;
-    }
-
-    bool getState()
-    {
-        return state;
+        return state!=oldState && state==Down;
     }
 
     bool getUpEvent()
     {
-        return up;
+        return state!=oldState && state==Up;
     }
 
     bool getLongPressEvent()
     {
-        return longPressState == Trigger;
+        return state!=oldState && state==LongPress;
+    }
+
+    void ignoreUntilNextPress()
+    {
+        state=oldState=Up;
     }
 
 private:
     const clock::duration longPressWaitTime = std::chrono::milliseconds(600);
 
-    bool state;
-    bool down, up;
+    bool value;
+    enum State { Up, Down, LongPress };
+    State oldState, state;
     clock::time_point downTime;
-    enum LongPressState { Waiting, Trigger, AlreadyTriggered };
-    LongPressState longPressState;
 };

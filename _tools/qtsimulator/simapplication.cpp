@@ -78,6 +78,11 @@ public:
         return BatteryLevel::B50;
     }
 
+    void setPause(bool paused)
+    {
+        printf("pause = %d\n", paused);
+    }
+
     void saveOptions(ApplicationOptions& options)
     {
         printf("saved options\n");

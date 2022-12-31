@@ -78,7 +78,10 @@ void Application::run()
     
     ui.lifecycle = UI::Ready;
     while (ui.lifecycle != UI::Quit) {
+        auto t1 = miosix::getTime();
         ui.update();
+        auto t2 = miosix::getTime();
+        iprintf("ui update = %lld\n",t2-t1);
         Thread::sleep(80);
     }
     
@@ -101,6 +104,11 @@ BatteryLevel Application::checkBatteryLevel()
     return batteryLevel(prevBatteryVoltage);
 }
 
+void Application::setPause(bool pause)
+{
+    sensorThreadId->wakeup();
+}
+
 void Application::saveOptions(ApplicationOptions& options)
 {
     ::saveOptions(&options,sizeof(options));
@@ -108,11 +116,13 @@ void Application::saveOptions(ApplicationOptions& options)
 
 void Application::sensorThread()
 {
+    sensorThreadId=Thread::getCurrentThread();
     //High priority for sensor read, prevents I2C reads from starving
     Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
     auto previousRefreshRate=sensor->getRefresh();
     while(ui.lifecycle != UI::Quit)
     {
+        while (ui.paused) Thread::wait();
         auto *rawFrame=new MLX90640RawFrame;
         bool success;
         do {

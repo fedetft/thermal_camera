@@ -39,6 +39,7 @@
 #include "images/emissivityicon.h"
 #include "images/smallcelsiusicon.h"
 #include "images/largecelsiusicon.h"
+#include "images/pauseicon.h"
 #include <mxgui/misc_inst.h>
 #include <mxgui/display.h>
 #include <memory>
@@ -69,6 +70,8 @@ public:
 
     BatteryLevel checkBatteryLevel();
 
+    void setPause(bool pause);
+
     void saveOptions(ApplicationOptions& options);
 };
 
@@ -88,6 +91,7 @@ public:
     };
     ApplicationOptions options;
     Lifecycle lifecycle;
+    bool paused = false;
 
     ApplicationUI(IOHandler& ioHandler, mxgui::Display& display, ButtonState initialBtnState)
         : display(display), renderer(std::make_unique<ThermalImageRenderer>()),
@@ -114,6 +118,7 @@ public:
     void updateFrame(MLX90640Frame *processedFrame)
     {
         if (processedFrame==nullptr) return; //Happens on shutdown
+        if (paused) return;
         lastFrameMutex.lock();
         lastFrame.reset(processedFrame);
         if (state == Main || state == Menu)
@@ -205,17 +210,35 @@ private:
         dc.drawImage(mxgui::Point(72,109),largecelsiusicon);
     }
 
+    void drawPauseIndicator(mxgui::DrawingContext& dc)
+    {
+        const mxgui::Point p0(85,1);
+        const mxgui::Point p1(85+8,1+8);
+        if (paused) dc.drawImage(p0,pauseicon);
+        else dc.clear(p0,p1,mxgui::black);
+    }
+
     void enterMain()
     {
         state = Main;
         mxgui::DrawingContext dc(display);
         drawStaticPartOfMainScreen(dc);
+        drawPauseIndicator(dc);
         drawFrame(dc);
+        onBtn.ignoreUntilNextPress();
+        upBtn.ignoreUntilNextPress();
     }
 
     void updateMain()
     {
         if(onBtn.getLongPressEvent()) enterShutdown();
+        else if(onBtn.getUpEvent())
+        {
+            paused=!paused;
+            ioHandler.setPause(paused);
+            mxgui::DrawingContext dc(display);
+            drawPauseIndicator(dc);
+        }
         else if(upBtn.getDownEvent()) enterMenu();
     }
 
@@ -251,8 +274,11 @@ private:
         menuEntry = Back;
         mxgui::DrawingContext dc(display);
         drawStaticPartOfMenuScreen(dc);
+        drawPauseIndicator(dc);
         drawFrame(dc);
         for (int i=0; i<NumEntries; i++) drawMenuEntry(dc, i);
+        upBtn.ignoreUntilNextPress();
+        onBtn.ignoreUntilNextPress();
     }
 
     void _drawMenuEntry(mxgui::DrawingContext& dc, int i, const char *label, const char *value="")
@@ -263,7 +289,7 @@ private:
         const mxgui::Color unselectedFGColor = mxgui::white;
         const auto fontHeight = dc.getFont().getHeight();
         short top = 50+i*fontHeight;
-        if (i==menuEntry) 
+        if (i==menuEntry)
         {
             dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
             dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));

@@ -51,6 +51,8 @@ public:
 
     BatteryLevel checkBatteryLevel();
 
+    void setPause(bool pause);
+
     void saveOptions(ApplicationOptions& options);
     
 private:
@@ -58,8 +60,6 @@ private:
     Application& operator=(const Application&)=delete;
 
     using UI = ApplicationUI<Application>;
-
-    void drawBatteryIcon();
     
     void sensorThread();
     
@@ -67,6 +67,7 @@ private:
 
     void renderThread();
 
+    miosix::Thread *sensorThreadId;
     mxgui::Display& display;
     UI ui;
     int prevBatteryVoltage=42; //4.2V

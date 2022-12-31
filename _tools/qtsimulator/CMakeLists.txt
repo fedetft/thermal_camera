@@ -45,7 +45,8 @@ set(FOO_IMG
     ../../images/miosixlogoicon.png
     ../../images/emissivityicon.png
     ../../images/smallcelsiusicon.png
-    ../../images/largecelsiusicon.png)
+    ../../images/largecelsiusicon.png
+    ../../images/pauseicon.png)
 preprocess_png(IMG_OUT ${FOO_IMG})
 
 # List here your application files
