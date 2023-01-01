@@ -98,11 +98,12 @@ int TextBox::draw(DrawingContext& dc, Point p0, Point p1,
 {
     unsigned short left=p0.x(), top=p0.y();
     unsigned short right=p1.x(), btm=p1.y();
-    if (topMargin>0) dc.clear(Point(left,top),Point(right,top+topMargin), dc.getBackground());
+    const Color bgColor = dc.getBackground();
+    if (topMargin>0) dc.clear(Point(left,top),Point(right,top+topMargin), bgColor);
     top+=topMargin;
-    if (leftMargin>0) dc.clear(Point(left,top), Point(left+leftMargin,btm), dc.getBackground());
+    if (leftMargin>0) dc.clear(Point(left,top), Point(left+leftMargin,btm), bgColor);
     left+=leftMargin;
-    if (rightMargin>0) dc.clear(Point(right-rightMargin,top), Point(right,btm), dc.getBackground());
+    if (rightMargin>0) dc.clear(Point(right-rightMargin,top), Point(right,btm), bgColor);
     right-=rightMargin;
     return TextBox::draw(dc, Point(left,top), Point(right,btm), str, options);
 }
@@ -132,7 +133,7 @@ int TextBox::draw(DrawingContext& dc, Point p0, Point p1,
         {
             const short textRight=left+end.second-1;
             dc.clippedWrite(Point(left,lineTop), Point(left,lineTop), Point(textRight,lineBottom-1), p);
-            if (withBG && textRight<=right) dc.clear(Point(textRight,lineTop), Point(right,lineBottom-1), bgColor);
+            if (withBG && textRight<=right) dc.clear(Point(textRight+1,lineTop), Point(right,lineBottom-1), bgColor);
         }
         if ((options&AlignmentMask) == CenterAlignment)
         {
