@@ -30,6 +30,7 @@
 #include "renderer.h"
 #include "edge_detector.h"
 #include "textbox.h"
+#include "version.h"
 #include "drivers/misc.h"
 #include "images/batt100icon.h"
 #include "images/batt75icon.h"
@@ -224,15 +225,17 @@ void ApplicationUI<IOHandler>::enterBootMessage()
     y+=4;
     dc.setFont(smallFont);
     dc.write(mxgui::Point((width-s1pix)/2,y),s1);
-    #ifdef _MIOSIX
     if (upBtn.getValue()) {
-        dc.setFont(mxgui::tahoma);
-        TextBox::draw(dc, mxgui::Point(0,dc.getHeight()-50), 
+        #ifdef _MIOSIX
+        std::string ver = std::string(miosix::getMiosixVersion()) + "\n" + thermal_camera_version;
+        #else
+        std::string ver = std::string("simulator\n") + thermal_camera_version;
+        #endif
+        TextBox::draw(dc, mxgui::Point(0,dc.getHeight()-smallFont.getHeight()*6), 
             mxgui::Point(dc.getWidth()-1,dc.getHeight()-1),
-            miosix::getMiosixVersion(),
+            ver.c_str(),
             TextBox::TextOnlyBackground|TextBox::CharWrap|TextBox::LeftAlignment);
     }
-    #endif
 }
 
 template<class IOHandler>

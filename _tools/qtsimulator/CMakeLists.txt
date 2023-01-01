@@ -54,7 +54,8 @@ set(FOO_SRCS
     simapplication.cpp
     ../../renderer.cpp
     ../../colormap.cpp
-    ../../textbox.cpp)
+    ../../textbox.cpp
+    ../../version.cpp)
 
 # These are the sources of the mxgui library and the simulator
 set(LIB_SRCS

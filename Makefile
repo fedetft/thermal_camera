@@ -18,7 +18,7 @@ SUBDIRS := $(KPATH) mxgui
 ##
 SRC :=                                             \
 main.cpp application.cpp renderer.cpp colormap.cpp \
-textbox.cpp                                        \
+textbox.cpp version.cpp                            \
 drivers/display_er_oledm015.cpp drivers/misc.cpp   \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp      \
 drivers/flash.cpp drivers/options_save.cpp
@@ -43,6 +43,11 @@ SRC := $(SRC2) $(SRC)
 
 # This prevents make from deleting the intermediate .cpp files
 .PRECIOUS: $(SRC2)
+
+# Consider the version number file to be always outdated
+.PHONY: version.cpp
+# Dynamically get the version from git
+VERSION := $(shell if ! git describe --always 2> /dev/null; then echo 0000000; fi)
 
 ##
 ## List here additional static libraries with relative path
@@ -73,10 +78,10 @@ OBJ := $(addsuffix .o, $(basename $(SRC)))
 ## Always include CONFPATH first, as it overrides the config file location
 CXXFLAGS := $(CXXFLAGS_BASE) -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
             -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS)
+            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -D___VERSION=\"$(VERSION)\"
 CFLAGS   := $(CFLAGS_BASE)   -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
             -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS)
+            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -D___VERSION=\"$(VERSION)\"
 AFLAGS   := $(AFLAGS_BASE)
 LFLAGS   := $(LFLAGS_BASE)
 DFLAGS   := -MMD -MP
