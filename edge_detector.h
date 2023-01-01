@@ -33,8 +33,7 @@ template <bool activeLevel>
 class ButtonEdgeDetector
 {
 public:
-    ButtonEdgeDetector(bool initialValue)
-        : value(initialValue), oldState(Up), state(Up) {}
+    ButtonEdgeDetector(bool initialValue) : value(initialValue) {}
     
     using clock = std::chrono::steady_clock;
 
@@ -60,10 +59,26 @@ public:
                 break;
             default: break;
         }
+        autorepeatTrig=false;
+        if (state==Down || state==LongPress)
+        {
+            clock::time_point now = clock().now();
+            if (!autorepeatArmed && (now-downTime)>=autorepeatWaitTime)
+            {
+                autorepeatArmed = autorepeatTrig = true;
+                lastARTrigTime = now;
+            }
+            if (autorepeatArmed && (now-lastARTrigTime)>=autorepeatPeriod)
+            {
+                autorepeatTrig = true;
+                lastARTrigTime = now;
+            }
+        } else autorepeatArmed = false;
         value=newValue;
         //if (state!=oldState && state==Down) printf("%p down\n", this);
         //if (state!=oldState && state==Up) printf("%p up\n", this);
         //if (state!=oldState && state==LongPress) printf("%p long press\n", this);
+        //if (autorepeatTrig) printf("%p autorepeat\n", this);
     }
 
     bool getDownEvent()
@@ -81,9 +96,15 @@ public:
         return state!=oldState && state==LongPress;
     }
 
+    bool getAutorepeatEvent()
+    {
+        return getDownEvent() || autorepeatTrig;
+    }
+
     void ignoreUntilNextPress()
     {
         state=oldState=Up;
+        autorepeatArmed=false;
     }
 
     bool getValue()
@@ -93,9 +114,13 @@ public:
 
 private:
     const clock::duration longPressWaitTime = std::chrono::milliseconds(600);
+    const clock::duration autorepeatWaitTime = std::chrono::milliseconds(400);
+    const clock::duration autorepeatPeriod = std::chrono::milliseconds(80);
 
     bool value;
     enum State { Up, Down, LongPress };
-    State oldState, state;
+    State oldState=Up, state=Up;
+    bool autorepeatArmed=false, autorepeatTrig=false;
     clock::time_point downTime;
+    clock::time_point lastARTrigTime;
 };

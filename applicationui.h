@@ -393,7 +393,7 @@ template<class IOHandler>
 void ApplicationUI<IOHandler>::updateMenu()
 {
     mxgui::DrawingContext dc(display);
-    if (onBtn.getDownEvent())
+    if (onBtn.getAutorepeatEvent())
     {
         switch(menuEntry)
         {
@@ -415,7 +415,7 @@ void ApplicationUI<IOHandler>::updateMenu()
                 return;
         }
     }
-    else if(upBtn.getDownEvent())
+    else if(upBtn.getAutorepeatEvent())
     {
         int oldEntry = menuEntry;
         menuEntry=(menuEntry+1)%NumEntries;
