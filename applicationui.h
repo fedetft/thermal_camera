@@ -292,7 +292,7 @@ private:
         onBtn.ignoreUntilNextPress();
     }
 
-    void _drawMenuEntry(mxgui::DrawingContext& dc, int i, const char *label, const char *value="")
+    void _drawMenuEntry(mxgui::DrawingContext& dc, int i, const char *label, const char *value=NULL)
     {
         const mxgui::Color selectedBGColor = mxgui::Color(to565(255,128,0));
         const mxgui::Color selectedFGColor = mxgui::black;
@@ -300,16 +300,15 @@ private:
         const mxgui::Color unselectedFGColor = mxgui::white;
         const auto fontHeight = dc.getFont().getHeight();
         short top = 50+i*fontHeight;
-        if (i==menuEntry)
+        if (i==menuEntry) dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
+        else dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
+        if (value)
         {
-            dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),selectedBGColor);
-            dc.setTextColor(std::make_pair(selectedFGColor,selectedBGColor));
+            TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(74,top+fontHeight-1), label, 0, 0, 3, 0);
+            TextBox::draw(dc, mxgui::Point(75,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), value, 0, 0, 0, 3);
         } else {
-            dc.clear(mxgui::Point(0,top),mxgui::Point(127,top+fontHeight),unselectedBGColor);
-            dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
+            TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), label, 0, 0, 3, 3);
         }
-        dc.write(mxgui::Point(3,top),label);
-        dc.write(mxgui::Point(75,top),value);
     }
 
     void drawMenuEntry(mxgui::DrawingContext& dc, int id)
