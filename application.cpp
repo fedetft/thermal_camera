@@ -26,7 +26,6 @@
  ***************************************************************************/
 
 #include <application.h>
-#include <thread>
 #include <mxgui/misc_inst.h>
 #include <drivers/misc.h>
 #include <drivers/options_save.h>
@@ -66,15 +65,17 @@ Application::Application(Display& display)
 
 void Application::run()
 {
-    thread st(&Application::sensorThread,this);
-    thread pt(&Application::processThread,this);
+    //High priority for sensor read, prevents I2C reads from starving
+    sensorThread = Thread::create(Application::sensorThreadMainTramp, 2048U, Priority(MAIN_PRIORITY+1), static_cast<void*>(this), Thread::JOINABLE);
+    //Low priority for processing, prevents display writes from starving
+    Thread *processThread = Thread::create(Application::processThreadMainTramp, 2048U, Priority(MAIN_PRIORITY-1), static_cast<void*>(this), Thread::JOINABLE);
 
     //Drop first frame before starting the render thread
     MLX90640Frame *processedFrame=nullptr;
     processedFrameQueue.get(processedFrame);
     delete processedFrame;
 
-    thread rt(&Application::renderThread,this);
+    Thread *renderThread = Thread::create(Application::renderThreadMainTramp, 2048U, Priority(), static_cast<void*>(this), Thread::JOINABLE);
     
     ui.lifecycle = UI::Ready;
     while (ui.lifecycle != UI::Quit) {
@@ -85,12 +86,12 @@ void Application::run()
         Thread::sleep(80);
     }
     
-    sensorThreadId->wakeup(); //Prevents deadlock if acquisition is paused
-    st.join();
+    sensorThread->wakeup(); //Prevents deadlock if acquisition is paused
+    sensorThread->join();
     if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
-    pt.join();
+    processThread->join();
     if(processedFrameQueue.isEmpty()) processedFrameQueue.put(nullptr); //Prevents deadlock
-    rt.join();
+    renderThread->join();
 }
 
 ButtonState Application::checkButtons()
@@ -107,7 +108,7 @@ BatteryLevel Application::checkBatteryLevel()
 
 void Application::setPause(bool pause)
 {
-    sensorThreadId->wakeup();
+    sensorThread->wakeup();
 }
 
 void Application::saveOptions(ApplicationOptions& options)
@@ -115,11 +116,14 @@ void Application::saveOptions(ApplicationOptions& options)
     ::saveOptions(&options,sizeof(options));
 }
 
-void Application::sensorThread()
+void *Application::sensorThreadMainTramp(void *p)
 {
-    sensorThreadId=Thread::getCurrentThread();
-    //High priority for sensor read, prevents I2C reads from starving
-    Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
+    static_cast<Application *>(p)->sensorThreadMain();
+    return nullptr;
+}
+
+void Application::sensorThreadMain()
+{
     auto previousRefreshRate=sensor->getRefresh();
     while(ui.lifecycle!=UI::Quit)
     {
@@ -151,10 +155,14 @@ void Application::sensorThread()
             MemoryProfiling::getAbsoluteFreeStack());
 }
 
-void Application::processThread()
+void *Application::processThreadMainTramp(void *p)
 {
-    //Low priority for processing, prevents display writes from starving
-    Thread::getCurrentThread()->setPriority(MAIN_PRIORITY-1);
+    static_cast<Application *>(p)->processThreadMain();
+    return nullptr;
+}
+
+void Application::processThreadMain()
+{
     while(ui.lifecycle != UI::Quit)
     {
         MLX90640RawFrame *rawFrame=nullptr;
@@ -172,7 +180,13 @@ void Application::processThread()
             MemoryProfiling::getAbsoluteFreeStack());
 }
 
-void Application::renderThread()
+void *Application::renderThreadMainTramp(void *p)
+{
+    static_cast<Application *>(p)->renderThreadMain();
+    return nullptr;
+}
+
+void Application::renderThreadMain()
 {
     while(ui.lifecycle != UI::Quit)
     {

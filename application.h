@@ -61,13 +61,16 @@ private:
 
     using UI = ApplicationUI<Application>;
     
-    void sensorThread();
+    static void *sensorThreadMainTramp(void *p);
+    inline void sensorThreadMain();
     
-    void processThread();
+    static void *processThreadMainTramp(void *p);
+    inline void processThreadMain();
 
-    void renderThread();
+    static void *renderThreadMainTramp(void *p);
+    inline void renderThreadMain();
 
-    miosix::Thread *sensorThreadId;
+    miosix::Thread *sensorThread;
     mxgui::Display& display;
     UI ui;
     int prevBatteryVoltage=42; //4.2V
