@@ -85,6 +85,7 @@ void Application::run()
         Thread::sleep(80);
     }
     
+    sensorThreadId->wakeup(); //Prevents deadlock if acquisition is paused
     st.join();
     if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
     pt.join();
@@ -120,9 +121,8 @@ void Application::sensorThread()
     //High priority for sensor read, prevents I2C reads from starving
     Thread::getCurrentThread()->setPriority(MAIN_PRIORITY+1);
     auto previousRefreshRate=sensor->getRefresh();
-    while(ui.lifecycle != UI::Quit)
+    while(ui.lifecycle!=UI::Quit)
     {
-        while (ui.paused) Thread::wait();
         auto *rawFrame=new MLX90640RawFrame;
         bool success;
         do {
@@ -145,6 +145,7 @@ void Application::sensorThread()
             puts("Dropped frame");
             delete rawFrame; //Drop frame without leaking memory
         }
+        while (ui.paused && ui.lifecycle!=UI::Quit) Thread::wait();
     }
     iprintf("sensorThread min free stack %d\n",
             MemoryProfiling::getAbsoluteFreeStack());

@@ -414,7 +414,7 @@ void ApplicationUI<IOHandler>::updateMenu()
                 enterMain();
                 return;
         }
-    }
+    } 
     else if(upBtn.getAutorepeatEvent())
     {
         int oldEntry = menuEntry;
