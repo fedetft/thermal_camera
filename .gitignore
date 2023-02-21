@@ -6,6 +6,7 @@ main.elf
 main.map
 images/*.h
 images/*.cpp
+build
 
 ### https://github.com/github/gitignore/blob/main/KiCad.gitignore
 # For PCBs designed using KiCad: https://www.kicad.org/

@@ -131,8 +131,8 @@ static const int level2MaxNumApps=4;
 //#define MXGUI_COLOR_DEPTH_8_BIT //Untested
 #define MXGUI_COLOR_DEPTH_16_BIT
 
-static const unsigned int SIMULATOR_DISP_HEIGHT=320;
-static const unsigned int SIMULATOR_DISP_WIDTH=240;
+static const unsigned int SIMULATOR_DISP_HEIGHT=128;
+static const unsigned int SIMULATOR_DISP_WIDTH=128;
 static const unsigned int SIMULATOR_FGCOLOR=0xffff;
 static const unsigned int SIMULATOR_BGCOLOR=0;
 
@@ -152,7 +152,7 @@ static const unsigned int SIMULATOR_BGCOLOR=0;
 #define MXGUI_FONT_DROID21
 #define MXGUI_FONT_MISCFIXED
 #define MXGUI_FONT_TAHOMA
-#define MXGUI_ENABLE_BOLD_FONTS
+//#define MXGUI_ENABLE_BOLD_FONTS
 
 //Default font
 #define defaultFont tahoma

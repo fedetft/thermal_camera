@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico                               *
+ *   Copyright (C) 2022 by Daniele Cattaneo and Terraneo Federico          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,24 +27,42 @@
 
 #pragma once
 
-#include <miosix.h>
+#ifdef _MIOSIX
+#include "MLX90640_API.h"
+#else
+const int scaleFactor=4;
+#endif
 
-class ButtonEdgeDetector
+/**
+ * Raw MLX90640 frame as read from the sensor by MLX90640::readFrame()
+ * Needs to be passed to MLX90640::processFrame() to compute temperatures
+ */
+class MLX90640RawFrame
 {
 public:
-    ButtonEdgeDetector(miosix::GpioPin pin, int activeLevel=1)
-        : pin(pin), state(false), active(activeLevel==0) {}
+    unsigned short subframe[2][834]; // Heavy object! ~3.4 KByte
+};
 
-    bool pressed()
-    {
-        bool newState=pin.value() ^ active;
-        bool result = newState && state==false;
-        state=newState;
-        return result;
-    }
-
-private:
-    miosix::GpioPin pin;
-    bool state;
-    bool active;
+/**
+ * Processed MLX90640 frame with temperature data. Temperature is stored
+ * as an array of short, one per pixel, which contain the temperature in
+ * degrees celsius multiplied by a scale factor so as to preserve a resolution
+ * of less than 1°C. Note that the sensor is quite noisy, so the fractional
+ * data is more useful for showing as an image, rather than to display as
+ * a number.
+ */
+class MLX90640Frame
+{
+public:
+    static const int nx=32, ny=24; ///< Image resolution
+    static const int scaleFactor=::scaleFactor; ///< Temperature scale factor
+    short temperature[nx*ny]; // Heavy object! 1.5 KByte
+    
+    /**
+     * \param x x coordinate
+     * \param y y coordinate
+     * \return the temperature at the given coordinate, with 0,0 the top left
+     * point, compensating for the sensor orientation on the board
+     */
+    short getTempAt(int x, int y) { return temperature[(nx-1-x)+y*nx]; }
 };
