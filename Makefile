@@ -78,10 +78,10 @@ OBJ := $(addsuffix .o, $(basename $(SRC)))
 ## Always include CONFPATH first, as it overrides the config file location
 CXXFLAGS := $(CXXFLAGS_BASE) -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
             -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -D___VERSION=\"$(VERSION)\"
+            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -DTC_VERSION=\"$(VERSION)\"
 CFLAGS   := $(CFLAGS_BASE)   -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
             -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -D___VERSION=\"$(VERSION)\"
+            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -DTC_VERSION=\"$(VERSION)\"
 AFLAGS   := $(AFLAGS_BASE)
 LFLAGS   := $(LFLAGS_BASE)
 DFLAGS   := -MMD -MP
