@@ -1310,37 +1310,37 @@ int ExtractDeviatingPixels(const uint16_t *eeData, paramsMLX90640 *mlx90640)
 
 //------------------------------------------------------------------------------
 
- int CheckAdjacentPixels(uint16_t pix1, uint16_t pix2)
- {
-     int pixPosDif;
-     
-     pixPosDif = pix1 - pix2;
-     if(pixPosDif > -34 && pixPosDif < -30)
-     {
-         return -6;
-     } 
-     if(pixPosDif > -2 && pixPosDif < 2)
-     {
-         return -6;
-     } 
-     if(pixPosDif > 30 && pixPosDif < 34)
-     {
-         return -6;
-     }
-     
-     return 0;    
- }
- 
- //------------------------------------------------------------------------------
- 
- int CheckEEPROMValid(const uint16_t *eeData)  
- {
-     int deviceSelect;
-     deviceSelect = eeData[10] & 0x0040;
-     if(deviceSelect == 0)
-     {
-         return 0;
-     }
-     
-     return -7;    
- }        
+int CheckAdjacentPixels(uint16_t pix1, uint16_t pix2)
+{
+    int pixPosDif;
+    
+    pixPosDif = pix1 - pix2;
+    if(pixPosDif > -34 && pixPosDif < -30)
+    {
+        return -6;
+    } 
+    if(pixPosDif > -2 && pixPosDif < 2)
+    {
+        return -6;
+    } 
+    if(pixPosDif > 30 && pixPosDif < 34)
+    {
+        return -6;
+    }
+    
+    return 0;    
+}
+
+//------------------------------------------------------------------------------
+
+int CheckEEPROMValid(const uint16_t *eeData)  
+{
+    int deviceSelect;
+    deviceSelect = eeData[10] & 0x0040;
+    if(deviceSelect == 0)
+    {
+        return 0;
+    }
+    
+    return -7;    
+}        
