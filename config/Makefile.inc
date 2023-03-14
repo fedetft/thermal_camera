@@ -63,7 +63,7 @@ OPT_BOARD := stm32f205_generic
 ## size and speed
 ##
 #OPT_OPTIMIZATION := -O0
-OPT_OPTIMIZATION := -O2
+OPT_OPTIMIZATION := -O2 -ffast-math
 #OPT_OPTIMIZATION := -O3
 #OPT_OPTIMIZATION := -Os
 

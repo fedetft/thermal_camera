@@ -42,10 +42,26 @@ int ExtractDeviatingPixels(const uint16_t *eeData, paramsMLX90640 *mlx90640);
 int CheckAdjacentPixels(uint16_t pix1, uint16_t pix2);
 int CheckEEPROMValid(const uint16_t *eeData);  
 
+inline float fast_rsqrtf(float number)
+{
+    union {
+        float    f;
+        uint32_t i;
+    } conv = { .f = number };
+    conv.i  = 0x5f3759df - (conv.i >> 1);
+    conv.f *= 1.5F - (number * 0.5F * conv.f * conv.f);
+    conv.f *= 1.5F - (number * 0.5F * conv.f * conv.f);
+    return conv.f;
+}
+
+inline float quadrtf(float number)
+{
+    return fast_rsqrtf(fast_rsqrtf(number));
+}
   
 int MLX90640_DumpEE(uint8_t slaveAddr, uint16_t *eeData)
 {
-     return MLX90640_I2CRead(slaveAddr, 0x2400, 832, eeData);
+    return MLX90640_I2CRead(slaveAddr, 0x2400, 832, eeData);
 }
 
 int MLX90640_GetFrameData(uint8_t slaveAddr, uint16_t *frameData)
@@ -375,9 +391,9 @@ void MLX90640_CalculateTo(const uint16_t *frameData, const paramsMLX90640 *param
             alphaCompensated = (params->alpha[pixelNumber] - params->tgc * params->cpAlpha[subPage])*(1 + params->KsTa * (ta - 25));
             
             Sx = powf(alphaCompensated, 3.f) * (irData + alphaCompensated * taTr);
-            Sx = sqrtf(sqrtf(Sx)) * params->ksTo[1];
+            Sx = quadrtf(Sx) * params->ksTo[1];
             
-            To = sqrtf(sqrtf(irData/(alphaCompensated * (1 - params->ksTo[1] * 273.15) + Sx) + taTr)) - 273.15;
+            To = quadrtf(irData/(alphaCompensated * (1 - params->ksTo[1] * 273.15) + Sx) + taTr) - 273.15;
                     
             if(To < params->ct[1])
             {
@@ -396,7 +412,7 @@ void MLX90640_CalculateTo(const uint16_t *frameData, const paramsMLX90640 *param
                 range = 3;            
             }      
             
-            To = sqrtf(sqrtf(irData / (alphaCompensated * alphaCorrR[range] * (1 + params->ksTo[range] * (To - params->ct[range]))) + taTr)) - 273.15;
+            To = quadrtf(irData / (alphaCompensated * alphaCorrR[range] * (1 + params->ksTo[range] * (To - params->ct[range]))) + taTr) - 273.15;
             
             result[pixelNumber] = To;
         }
@@ -508,9 +524,9 @@ void MLX90640_CalculateToShort(const uint16_t *frameData, const paramsMLX90640 *
             alphaCompensated = (params->alpha[pixelNumber] - params->tgc * params->cpAlpha[subPage])*(1 + params->KsTa * (ta - 25));
             
             Sx = powf(alphaCompensated, 3.f) * (irData + alphaCompensated * taTr);
-            Sx = sqrtf(sqrtf(Sx)) * params->ksTo[1];
+            Sx = quadrtf(Sx) * params->ksTo[1];
             
-            To = sqrtf(sqrtf(irData/(alphaCompensated * (1 - params->ksTo[1] * 273.15) + Sx) + taTr)) - 273.15;
+            To = quadrtf(irData/(alphaCompensated * (1 - params->ksTo[1] * 273.15) + Sx) + taTr) - 273.15;
                     
             if(To < params->ct[1])
             {
@@ -529,7 +545,7 @@ void MLX90640_CalculateToShort(const uint16_t *frameData, const paramsMLX90640 *
                 range = 3;            
             }      
             
-            To = sqrtf(sqrtf(irData / (alphaCompensated * alphaCorrR[range] * (1 + params->ksTo[range] * (To - params->ct[range]))) + taTr)) - 273.15;
+            To = quadrtf(irData / (alphaCompensated * alphaCorrR[range] * (1 + params->ksTo[range] * (To - params->ct[range]))) + taTr) - 273.15;
             
             //Clamp to -99..999°C multiplied by scaleFactor
             result[pixelNumber] = static_cast<short>(
