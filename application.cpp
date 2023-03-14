@@ -79,10 +79,10 @@ void Application::run()
     
     ui.lifecycle = UI::Ready;
     while (ui.lifecycle != UI::Quit) {
-        auto t1 = miosix::getTime();
+        //auto t1 = miosix::getTime();
         ui.update();
-        auto t2 = miosix::getTime();
-        iprintf("ui update = %lld\n",t2-t1);
+        //auto t2 = miosix::getTime();
+        //iprintf("ui update = %lld\n",t2-t1);
         Thread::sleep(80);
     }
     
@@ -168,13 +168,13 @@ void Application::processThreadMain()
         MLX90640RawFrame *rawFrame=nullptr;
         rawFrameQueue.get(rawFrame);
         if(rawFrame==nullptr) continue; //Happens on shutdown
-        auto t1=getTime();
+        //auto t1=getTime();
         auto *processedFrame=new MLX90640Frame;
         sensor->processFrame(rawFrame,processedFrame,ui.options.emissivity);
         delete rawFrame;
         processedFrameQueue.put(processedFrame);
-        auto t2=getTime();
-        iprintf("process = %lld\n",t2-t1);
+        //auto t2=getTime();
+        //iprintf("process = %lld\n",t2-t1);
     }
     iprintf("processThread min free stack %d\n",
             MemoryProfiling::getAbsoluteFreeStack());

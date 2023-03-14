@@ -440,13 +440,13 @@ void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
     lastFrameMutex.lock();
     if (lastFrame.get()!=nullptr)
     {
-        #ifdef _MIOSIX
+        #if 0 && defined(_MIOSIX)
         auto t1 = miosix::getTime();
         #endif
         bool smallCached=(state == Menu); //Cache now if the main thread changes it
         if(smallCached==false) renderer->render(lastFrame.get());
         else renderer->renderSmall(lastFrame.get());
-        #ifdef _MIOSIX
+        #if 0 && defined(_MIOSIX)
         auto t2 = miosix::getTime();
         #endif
         dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
@@ -472,7 +472,7 @@ void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
             drawTemperature(dc,mxgui::Point(96,25),mxgui::Point(112,33),smallFont,
                             renderer->minTemperature());
         }
-        #ifdef _MIOSIX
+        #if 0 && defined(_MIOSIX)
         auto t3 = miosix::getTime();
         iprintf("render = %lld draw = %lld\n",t2-t1,t3-t2);
         #endif
