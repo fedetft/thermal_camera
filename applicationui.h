@@ -403,7 +403,7 @@ void ApplicationUI<IOHandler>::updateMenu()
                 drawMenuEntry(dc, Emissivity);
                 break;
             case FrameRate: 
-                if(options.frameRate>=8) options.frameRate=1;
+                if(options.frameRate>=16) options.frameRate=1;
                 else options.frameRate*=2;
                 drawMenuEntry(dc, FrameRate);
                 break;
@@ -414,7 +414,7 @@ void ApplicationUI<IOHandler>::updateMenu()
                 enterMain();
                 return;
         }
-    } 
+    }
     else if(upBtn.getAutorepeatEvent())
     {
         int oldEntry = menuEntry;
