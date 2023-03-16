@@ -95,9 +95,12 @@ public:
 private:
     void doRender(MLX90640Frame *processedFrame, bool small);
 
-    static mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r);
+    template<void (ThermalImageRenderer::*putPix)(int x, int y, mxgui::Color c)>
+    inline void renderLoop(MLX90640Frame *processedFrame, short range);
 
-    static mxgui::Color pixMap(short t, short m, short r);
+    static inline mxgui::Color interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r);
+
+    static inline mxgui::Color pixMap(short t, short m, short r);
 
     void crosshairPixel(int x, int y);
 
@@ -107,6 +110,19 @@ private:
     {
         if(a>0) return (a+b/2)/b;
         return (a-b/2)/b;
+    }
+
+    inline void putPixelLarge(int y, int x, mxgui::Color c)
+    {
+        irImage[2*y  ][2*x  ]=c; //Image layout in memory is reversed
+        irImage[2*y+1][2*x  ]=c;
+        irImage[2*y  ][2*x+1]=c;
+        irImage[2*y+1][2*x+1]=c;
+    }
+
+    inline void putPixelSmall(int y, int x, mxgui::Color c)
+    {
+        irImageSmall[y][x]=c; //Image layout in memory is reversed
     }
 
     union {

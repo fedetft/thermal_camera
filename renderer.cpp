@@ -54,6 +54,43 @@ void ThermalImageRenderer::legend(mxgui::Color *legend, int legendSize)
     for(int i=0;i<legendSize;i++) legend[i]=colormap[colormapRange*i/(legendSize-1)];
 }
 
+template<void (ThermalImageRenderer::*putPix)(int x, int y, Color c)>
+void ThermalImageRenderer::renderLoop(MLX90640Frame *processedFrame, short range)
+{
+    const int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
+    Color c;
+    for(int y=0;y<ny-1;y++)
+    {
+        for(int x=0;x<nx-1;x++)
+        {
+            c=interpolate2d(processedFrame,2*x,2*y,minTemp,range);
+            (this->*putPix)(2*y, 2*x, c);
+            c=interpolate2d(processedFrame,2*x+1,2*y,minTemp,range);
+            (this->*putPix)(2*y, 2*x+1, c);
+        }
+        c=interpolate2d(processedFrame,62,2*y,minTemp,range);
+        (this->*putPix)(2*y, 62, c);
+        for(int x=0;x<nx-1;x++)
+        {
+            c=interpolate2d(processedFrame,2*x,2*y+1,minTemp,range);
+            (this->*putPix)(2*y+1, 2*x, c);
+            c=interpolate2d(processedFrame,2*x+1,2*y+1,minTemp,range);
+            (this->*putPix)(2*y+1, 2*x+1, c);
+        }
+        c=interpolate2d(processedFrame,62,2*y+1,minTemp,range);
+        (this->*putPix)(2*y+1, 62, c);
+    }
+    for(int x=0;x<nx-1;x++)
+    {
+        c=interpolate2d(processedFrame,2*x,46,minTemp,range);
+        (this->*putPix)(46, 2*x, c);
+        c=interpolate2d(processedFrame,2*x+1,46,minTemp,range);
+        (this->*putPix)(46, 2*x+1, c);
+    }
+    c=interpolate2d(processedFrame,62,46,minTemp,range);
+    (this->*putPix)(46, 62, c);
+}
+
 void ThermalImageRenderer::doRender(MLX90640Frame *processedFrame, bool small)
 {
     const int nx=MLX90640Frame::nx, ny=MLX90640Frame::ny;
@@ -68,27 +105,10 @@ void ThermalImageRenderer::doRender(MLX90640Frame *processedFrame, bool small)
     short range=max<short>(minRange*processedFrame->scaleFactor,maxTemp-minTemp);
     if(small)
     {
-        for(int y=0;y<(2*ny)-1;y++)
-        {
-            for(int x=0;x<(2*nx)-1;x++)
-            {
-                Color c=interpolate2d(processedFrame,x,y,minTemp,range);
-                irImageSmall[y][x]=c; //Image layout in memory is reversed
-            }
-        }
+        renderLoop<&ThermalImageRenderer::putPixelSmall>(processedFrame, range);
     } else {
-        for(int y=0;y<(2*ny)-1;y++)
-        {
-            for(int x=0;x<(2*nx)-1;x++)
-            {
-                Color c=interpolate2d(processedFrame,x,y,minTemp,range);
-                irImage[2*y  ][2*x  ]=c; //Image layout in memory is reversed
-                irImage[2*y+1][2*x  ]=c;
-                irImage[2*y  ][2*x+1]=c;
-                irImage[2*y+1][2*x+1]=c;
-            }
-        }
-         //Draw crosshair
+        renderLoop<&ThermalImageRenderer::putPixelLarge>(processedFrame, range);
+        //Draw crosshair
         static const unsigned char xrange[]={58,59,60,65,66,67};
         for(unsigned int xdex=0;xdex<sizeof(xrange);xdex++)
             for(int y=46;y<=47;y++)
@@ -106,16 +126,16 @@ void ThermalImageRenderer::doRender(MLX90640Frame *processedFrame, bool small)
 
 Color ThermalImageRenderer::interpolate2d(MLX90640Frame *processedFrame, int x, int y, short m, short r)
 {
-    if((x & 1)==0 && (y & 1)==0)
+    if((x % 2)==0 && (y % 2)==0)
         return pixMap(processedFrame->getTempAt(x/2,y/2),m,r);
 
-    if((x & 1)==0) //1d interp along y axis
+    if((x % 2)==0) //1d interp along y axis
     {
         short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt(x/2,(y/2)+1);
         return pixMap(roundedDiv(t,2),m,r);
     }
 
-    if((y & 1)==0) //1d interp along x axis
+    if((y % 2)==0) //1d interp along x axis
     {
         short t=processedFrame->getTempAt(x/2,y/2)+processedFrame->getTempAt((x/2)+1,y/2);
         return pixMap(roundedDiv(t,2),m,r);
