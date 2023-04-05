@@ -96,25 +96,28 @@ void __attribute__((naked)) DMA2_Stream3_IRQHandler()
 }
 
 static Thread *waiting=nullptr;
-static bool error;
+static uint32_t error;
 
 void __attribute__((used)) SPI1txDmaHandlerImpl()
 {
-    if(DMA2->LISR & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3 | DMA_LIFCR_CFEIF3))
-        error=true;
+    uint32_t lisr = DMA2->LISR;
+    if(lisr & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3 | DMA_LIFCR_CFEIF3))
+        error=lisr;
     DMA2->LIFCR=DMA_LIFCR_CTCIF3
               | DMA_LIFCR_CTEIF3
               | DMA_LIFCR_CDMEIF3
               | DMA_LIFCR_CFEIF3;
-    waiting->IRQwakeup();
-    if(waiting->IRQgetPriority()>Thread::IRQgetCurrentThread()->IRQgetPriority())
-        Scheduler::IRQfindNextThread();
-    waiting=nullptr;
+    if (!(DMA2_Stream3->CR & DMA_SxCR_EN) || (lisr & DMA_LISR_TCIF3)) {
+        waiting->IRQwakeup();
+        if(waiting->IRQgetPriority()>Thread::IRQgetCurrentThread()->IRQgetPriority())
+            Scheduler::IRQfindNextThread();
+        waiting=nullptr;
+    }
 }
 
 static void spi1SendDMA(const Color *data, int size)
 {
-    error=false;
+    error=0;
     unsigned short tempCr1=SPI1->CR1;
     SPI1->CR1=0;
     SPI1->CR2=SPI_CR2_TXDMAEN;
@@ -152,13 +155,13 @@ static void spi1SendDMA(const Color *data, int size)
             }
         }
     }
-                
+    
     NVIC_DisableIRQ(DMA2_Stream3_IRQn);
     spi1waitCompletion();
     SPI1->CR1=0;
     SPI1->CR2=0;
     SPI1->CR1=tempCr1;
-    //if(error) puts("SPI1 DMA tx failed"); //TODO: look into why this fails
+    //if(error) iprintf("SPI1 DMA tx failed LISR=%08lx\n", error); //TODO: look into why this fails
 }
 
 /**
