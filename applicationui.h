@@ -90,7 +90,8 @@ public:
         : display(display), renderer(std::make_unique<ThermalImageRenderer>()),
         ioHandler(ioHandler), upBtn(initialBtnState.up), onBtn(initialBtnState.on)
     {
-        enterBootMessage();
+        mxgui::DrawingContext dc(display);
+        enterBootMessage(dc);
     }
 
     void update();
@@ -111,31 +112,33 @@ private:
     ApplicationUI(const ApplicationUI&)=delete;
     ApplicationUI& operator=(const ApplicationUI&)=delete;
 
-    void enterBootMessage();
+    void enterBootMessage(mxgui::DrawingContext& dc);
 
-    void drawBatteryIcon();
+    void drawBatteryIcon(mxgui::DrawingContext& dc);
 
-    void updateBootMessage();
+    void updateBootMessage(mxgui::DrawingContext& dc);
 
     void drawStaticPartOfMainScreen(mxgui::DrawingContext& dc);
 
     void drawPauseIndicator(mxgui::DrawingContext& dc);
 
-    void enterMain();
+    void drawUSBConnectionIndicator(mxgui::DrawingContext& dc);
 
-    void updateMain();
+    void enterMain(mxgui::DrawingContext& dc);
+
+    void updateMain(mxgui::DrawingContext& dc);
 
     void drawStaticPartOfMenuScreen(mxgui::DrawingContext& dc);
 
-    void enterMenu();
+    void enterMenu(mxgui::DrawingContext& dc);
 
     void _drawMenuEntry(mxgui::DrawingContext& dc, int i, const char *label, const char *value=NULL);
 
     void drawMenuEntry(mxgui::DrawingContext& dc, int id);
 
-    void updateMenu();
+    void updateMenu(mxgui::DrawingContext& dc);
 
-    void enterShutdown();
+    void enterShutdown(mxgui::DrawingContext& dc);
 
     void drawFrame(mxgui::DrawingContext& dc);
 
@@ -179,17 +182,18 @@ private:
 template<class IOHandler>
 void ApplicationUI<IOHandler>::update()
 {
+    mxgui::DrawingContext dc(display);
     ButtonState btns = ioHandler.checkButtons();
     upBtn.update(btns.up);
     onBtn.update(btns.on);
     switch (state) {
-        case BootMsg: updateBootMessage(); break;
-        case Main: updateMain(); break;
-        case Menu: updateMenu(); break;
+        case BootMsg: updateBootMessage(dc); break;
+        case Main: updateMain(dc); break;
+        case Menu: updateMenu(dc); break;
         case Shutdown:
         default: break;
     }
-    if (state == Main || state == Menu) drawBatteryIcon();
+    if (state == Main || state == Menu) drawBatteryIcon(dc);
 }
 
 template<class IOHandler>
@@ -208,13 +212,12 @@ void ApplicationUI<IOHandler>::updateFrame(MLX90640Frame *processedFrame)
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::enterBootMessage()
+void ApplicationUI<IOHandler>::enterBootMessage(mxgui::DrawingContext& dc)
 {
     const char s0[]="Miosix";
     const char s1[]="Thermal camera";
     const int s0pix=miosixlogoicon.getWidth()+1+largeFont.calculateLength(s0);
     const int s1pix=smallFont.calculateLength(s1);
-    mxgui::DrawingContext dc(display);
     dc.setFont(largeFont);
     int width=dc.getWidth();
     int y=10;
@@ -239,9 +242,8 @@ void ApplicationUI<IOHandler>::enterBootMessage()
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::drawBatteryIcon()
+void ApplicationUI<IOHandler>::drawBatteryIcon(mxgui::DrawingContext& dc)
 {
-    mxgui::DrawingContext dc(display);
     mxgui::Point batteryIconPoint(104,0);
     switch(ioHandler.checkBatteryLevel())
     {
@@ -254,10 +256,10 @@ void ApplicationUI<IOHandler>::drawBatteryIcon()
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::updateBootMessage()
+void ApplicationUI<IOHandler>::updateBootMessage(mxgui::DrawingContext& dc)
 {
     if (upBtn.getValue()) return;
-    if (lifecycle == Ready) enterMain();
+    if (lifecycle == Ready) enterMain(dc);
 }
 
 template<class IOHandler>
@@ -291,10 +293,9 @@ void ApplicationUI<IOHandler>::drawPauseIndicator(mxgui::DrawingContext& dc)
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::enterMain()
+void ApplicationUI<IOHandler>::enterMain(mxgui::DrawingContext& dc)
 {
     state = Main;
-    mxgui::DrawingContext dc(display);
     drawStaticPartOfMainScreen(dc);
     drawPauseIndicator(dc);
     drawFrame(dc);
@@ -303,17 +304,16 @@ void ApplicationUI<IOHandler>::enterMain()
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::updateMain()
+void ApplicationUI<IOHandler>::updateMain(mxgui::DrawingContext& dc)
 {
-    if(onBtn.getLongPressEvent()) enterShutdown();
+    if(onBtn.getLongPressEvent()) enterShutdown(dc);
     else if(onBtn.getUpEvent())
     {
         paused=!paused;
         ioHandler.setPause(paused);
-        mxgui::DrawingContext dc(display);
         drawPauseIndicator(dc);
     }
-    else if(upBtn.getDownEvent()) enterMenu();
+    else if(upBtn.getDownEvent()) enterMenu(dc);
 }
 
 template<class IOHandler>
@@ -334,11 +334,10 @@ void ApplicationUI<IOHandler>::drawStaticPartOfMenuScreen(mxgui::DrawingContext&
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::enterMenu()
+void ApplicationUI<IOHandler>::enterMenu(mxgui::DrawingContext& dc)
 {
     state = Menu;
     menuEntry = Back;
-    mxgui::DrawingContext dc(display);
     drawStaticPartOfMenuScreen(dc);
     drawPauseIndicator(dc);
     drawFrame(dc);
@@ -390,9 +389,8 @@ void ApplicationUI<IOHandler>::drawMenuEntry(mxgui::DrawingContext& dc, int id)
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::updateMenu()
+void ApplicationUI<IOHandler>::updateMenu(mxgui::DrawingContext& dc)
 {
-    mxgui::DrawingContext dc(display);
     if (onBtn.getAutorepeatEvent())
     {
         switch(menuEntry)
@@ -411,7 +409,7 @@ void ApplicationUI<IOHandler>::updateMenu()
                 ioHandler.saveOptions(options);
                 break;
             case Back:
-                enterMain();
+                enterMain(dc);
                 return;
         }
     }
@@ -425,7 +423,7 @@ void ApplicationUI<IOHandler>::updateMenu()
 }
 
 template<class IOHandler>
-void ApplicationUI<IOHandler>::enterShutdown()
+void ApplicationUI<IOHandler>::enterShutdown(mxgui::DrawingContext& dc)
 {
     state = Shutdown;
     lifecycle = Quit;
