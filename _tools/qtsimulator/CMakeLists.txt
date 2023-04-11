@@ -46,7 +46,8 @@ set(FOO_IMG
     ../../images/emissivityicon.png
     ../../images/smallcelsiusicon.png
     ../../images/largecelsiusicon.png
-    ../../images/pauseicon.png)
+    ../../images/pauseicon.png
+    ../../images/usbicon.png)
 preprocess_png(IMG_OUT ${FOO_IMG})
 
 # List here your application files

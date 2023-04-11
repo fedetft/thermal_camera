@@ -42,6 +42,7 @@
 #include "images/smallcelsiusicon.h"
 #include "images/largecelsiusicon.h"
 #include "images/pauseicon.h"
+#include "images/usbicon.h"
 #include <mxgui/misc_inst.h>
 #include <mxgui/display.h>
 #include <memory>
@@ -71,6 +72,8 @@ public:
     ButtonState checkButtons();
 
     BatteryLevel checkBatteryLevel();
+
+    bool checkUSBConnected();
 
     void setPause(bool pause);
 
@@ -286,9 +289,18 @@ void ApplicationUI<IOHandler>::drawStaticPartOfMainScreen(mxgui::DrawingContext&
 template<class IOHandler>
 void ApplicationUI<IOHandler>::drawPauseIndicator(mxgui::DrawingContext& dc)
 {
-    const mxgui::Point p0(85,1);
-    const mxgui::Point p1(85+8,1+8);
+    const mxgui::Point p0(90,1);
+    const mxgui::Point p1(90+8,1+8);
     if (paused) dc.drawImage(p0,pauseicon);
+    else dc.clear(p0,p1,mxgui::black);
+}
+
+template<class IOHandler>
+void ApplicationUI<IOHandler>::drawUSBConnectionIndicator(mxgui::DrawingContext& dc)
+{
+    const mxgui::Point p0(80,1);
+    const mxgui::Point p1(80+5,1+10);
+    if (ioHandler.checkUSBConnected()) dc.drawImage(p0,usbicon);
     else dc.clear(p0,p1,mxgui::black);
 }
 
@@ -298,6 +310,7 @@ void ApplicationUI<IOHandler>::enterMain(mxgui::DrawingContext& dc)
     state = Main;
     drawStaticPartOfMainScreen(dc);
     drawPauseIndicator(dc);
+    drawUSBConnectionIndicator(dc);
     drawFrame(dc);
     onBtn.ignoreUntilNextPress();
     upBtn.ignoreUntilNextPress();
@@ -314,6 +327,7 @@ void ApplicationUI<IOHandler>::updateMain(mxgui::DrawingContext& dc)
         drawPauseIndicator(dc);
     }
     else if(upBtn.getDownEvent()) enterMenu(dc);
+    drawUSBConnectionIndicator(dc);
 }
 
 template<class IOHandler>
@@ -341,6 +355,7 @@ void ApplicationUI<IOHandler>::enterMenu(mxgui::DrawingContext& dc)
     menuEntry = Back;
     drawStaticPartOfMenuScreen(dc);
     drawPauseIndicator(dc);
+    drawUSBConnectionIndicator(dc);
     drawFrame(dc);
     for (int i=0; i<NumEntries; i++) drawMenuEntry(dc, i);
     upBtn.ignoreUntilNextPress();
@@ -392,6 +407,7 @@ void ApplicationUI<IOHandler>::drawMenuEntry(mxgui::DrawingContext& dc, int id)
 template<class IOHandler>
 void ApplicationUI<IOHandler>::updateMenu(mxgui::DrawingContext& dc)
 {
+    drawUSBConnectionIndicator(dc);
     if (onBtn.getAutorepeatEvent())
     {
         switch(menuEntry)

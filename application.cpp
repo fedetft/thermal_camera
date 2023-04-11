@@ -56,7 +56,7 @@ using namespace mxgui;
 Application::Application(Display& display)
     : display(display), ui(*this, display, ButtonState(1^up_btn::value(),on_btn::value())),
       i2c(make_unique<I2C1Master>(sen_sda::getPin(),sen_scl::getPin(),1000)),
-      sensor(make_unique<MLX90640>(i2c.get()))
+      sensor(make_unique<MLX90640>(i2c.get())), usb(make_unique<USBCDC>(Priority()))
 {
     loadOptions(&ui.options,sizeof(ui.options));
     if(sensor->setRefresh(refreshFromInt(ui.options.frameRate))==false)
@@ -104,6 +104,11 @@ BatteryLevel Application::checkBatteryLevel()
 {
     prevBatteryVoltage=min(prevBatteryVoltage,getBatteryVoltage());
     return batteryLevel(prevBatteryVoltage);
+}
+
+bool Application::checkUSBConnected()
+{
+    return usb->connected();
 }
 
 void Application::setPause(bool pause)

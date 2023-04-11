@@ -33,6 +33,7 @@
 #include <drivers/stm32f2_f4_i2c.h>
 #include <drivers/mlx90640.h>
 #include <drivers/hwmapping.h>
+#include <drivers/usb_tinyusb.h>
 #include "renderer.h"
 #include "applicationui.h"
 
@@ -50,6 +51,8 @@ public:
     ButtonState checkButtons();
 
     BatteryLevel checkBatteryLevel();
+    
+    bool checkUSBConnected();
 
     void setPause(bool pause);
 
@@ -76,6 +79,7 @@ private:
     int prevBatteryVoltage=42; //4.2V
     std::unique_ptr<miosix::I2C1Master> i2c;
     std::unique_ptr<MLX90640> sensor;
+    std::unique_ptr<USBCDC> usb;
     miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
     miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
 };

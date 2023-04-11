@@ -34,7 +34,8 @@ images/miosixlogoicon.png \
 images/emissivityicon.png \
 images/smallcelsiusicon.png \
 images/largecelsiusicon.png \
-images/pauseicon.png
+images/pauseicon.png \
+images/usbicon.png
 
 SRC2 := $(IMG:.png=.cpp)
 # Images should be compiled first to prevent missing includes

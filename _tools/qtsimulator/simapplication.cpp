@@ -78,6 +78,11 @@ public:
         return BatteryLevel::B50;
     }
 
+    bool checkUSBConnected()
+    {
+        return true;
+    }
+
     void setPause(bool paused)
     {
         printf("pause = %d\n", paused);
