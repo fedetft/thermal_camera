@@ -4,3 +4,6 @@
 [submodule "mxgui"]
 	path = mxgui
 	url = https://miosix.org/git-public/mxgui.git
+[submodule "tinyusb/tinyusb"]
+	path = tinyusb/tinyusb
+	url = https://github.com/hathach/tinyusb.git
