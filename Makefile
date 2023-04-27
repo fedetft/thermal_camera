@@ -21,7 +21,8 @@ main.cpp application.cpp renderer.cpp colormap.cpp \
 textbox.cpp version.cpp                            \
 drivers/display_er_oledm015.cpp drivers/misc.cpp   \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp      \
-drivers/flash.cpp drivers/options_save.cpp
+drivers/flash.cpp drivers/options_save.cpp         \
+drivers/usb_tinyusb.cpp
 
 IMG :=  \
 images/batt0icon.png \
