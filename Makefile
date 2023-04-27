@@ -11,7 +11,7 @@ include $(CONFPATH)/config/Makefile.inc
 ##
 ## List here subdirectories which contains makefiles
 ##
-SUBDIRS := $(KPATH) mxgui
+SUBDIRS := $(KPATH) mxgui tinyusb
 
 ##
 ## List here your source files (both .s, .c and .cpp)
@@ -52,12 +52,12 @@ VERSION := $(shell if ! git describe --always 2> /dev/null; then echo 0000000; f
 ##
 ## List here additional static libraries with relative path
 ##
-LIBS := mxgui/libmxgui.a
+LIBS := mxgui/libmxgui.a tinyusb/libtinyusb.a
 
 ##
 ## List here additional include directories (in the form -Iinclude_dir)
 ##
-INCLUDE_DIRS := -I. -I./mxgui
+INCLUDE_DIRS := -I. -I./mxgui -I./tinyusb/tinyusb/src -I./tinyusb
 
 ##############################################################################
 ## You should not need to modify anything below                             ##
