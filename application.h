@@ -73,6 +73,12 @@ private:
     static void *renderThreadMainTramp(void *p);
     inline void renderThreadMain();
 
+    static void *usbThreadMainTramp(void *p);
+    inline void usbThreadMain();
+
+    static void *usbFrameOutputThreadMainTramp(void *p);
+    inline void usbFrameOutputThreadMain();
+
     miosix::Thread *sensorThread;
     mxgui::Display& display;
     UI ui;
@@ -82,4 +88,8 @@ private:
     std::unique_ptr<USBCDC> usb;
     miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
     miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
+    volatile bool usbDumpRawFrames=false;
+    miosix::Queue<MLX90640RawFrame*, 1> usbOutputQueue;
+
+    const unsigned long long usbWriteTimeout = 50ULL * 1000000ULL; // 50ms
 };

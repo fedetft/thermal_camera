@@ -38,6 +38,7 @@
 #include <images/emissivityicon.h>
 #include <images/smallcelsiusicon.h>
 #include <images/largecelsiusicon.h>
+#include <string.h>
 
 using namespace std;
 using namespace miosix;
@@ -76,6 +77,9 @@ void Application::run()
     delete processedFrame;
 
     Thread *renderThread = Thread::create(Application::renderThreadMainTramp, 2048U, Priority(), static_cast<void*>(this), Thread::JOINABLE);
+
+    Thread *usbInteractiveThread = Thread::create(Application::usbThreadMainTramp, 2048U, Priority(), static_cast<void*>(this), Thread::JOINABLE);
+    Thread *usbOutputThread = Thread::create(Application::usbFrameOutputThreadMainTramp, 2048U, Priority(), static_cast<void*>(this), Thread::JOINABLE);
     
     ui.lifecycle = UI::Ready;
     while (ui.lifecycle != UI::Quit) {
@@ -85,13 +89,23 @@ void Application::run()
         //iprintf("ui update = %lld\n",t2-t1);
         Thread::sleep(80);
     }
+
+    usb->prepareShutdown();
     
     sensorThread->wakeup(); //Prevents deadlock if acquisition is paused
     sensorThread->join();
+    iprintf("sensorThread joined\n");
     if(rawFrameQueue.isEmpty()) rawFrameQueue.put(nullptr); //Prevents deadlock
     processThread->join();
+    iprintf("processThread joined\n");
     if(processedFrameQueue.isEmpty()) processedFrameQueue.put(nullptr); //Prevents deadlock
     renderThread->join();
+    iprintf("renderThread joined\n");
+    if(usbOutputQueue.isEmpty()) usbOutputQueue.put(nullptr);
+    usbOutputThread->join();
+    iprintf("usbOutputThread joined\n");
+    usbInteractiveThread->join();
+    iprintf("usbInteractiveThread joined\n");
 }
 
 ButtonState Application::checkButtons()
@@ -176,8 +190,8 @@ void Application::processThreadMain()
         //auto t1=getTime();
         auto *processedFrame=new MLX90640Frame;
         sensor->processFrame(rawFrame,processedFrame,ui.options.emissivity);
-        delete rawFrame;
         processedFrameQueue.put(processedFrame);
+        usbOutputQueue.put(rawFrame);
         //auto t2=getTime();
         //iprintf("process = %lld\n",t2-t1);
     }
@@ -200,5 +214,91 @@ void Application::renderThreadMain()
         ui.updateFrame(processedFrame);
     }
     iprintf("renderThread min free stack %d\n",
+            MemoryProfiling::getAbsoluteFreeStack());
+}
+
+void *Application::usbThreadMainTramp(void *p)
+{
+    static_cast<Application *>(p)->usbThreadMain();
+    return nullptr;
+}
+
+char *hexDump(const uint8_t *bytes, int size, char *output)
+{
+    static const char *hex = "0123456789ABCDEF";
+    for (int i=0; i<size; i++)
+    {
+        *output++ = hex[bytes[i] & 0xF];
+        *output++ = hex[bytes[i] >> 4];
+    }
+    return output;
+}
+
+void Application::usbThreadMain()
+{
+    while (ui.lifecycle != UI::Quit) {
+        char buf[80];
+        bool success = usb->readLine(buf, 80);
+        if (!success)
+            continue;
+        
+        if (strcmp(buf, "get_eeprom") == 0) {
+            const MLX90640EEPROM& eeprom = sensor->getEEPROM();
+            const int hexSize = MLX90640EEPROM::eepromSize*4+2;
+            char *hex = new char[hexSize];
+            char *p = hexDump(reinterpret_cast<const uint8_t *>(eeprom.eeprom), MLX90640EEPROM::eepromSize*2, hex);
+            *p++ = '\r'; *p++ = '\n';
+            usb->write(reinterpret_cast<uint8_t *>(hex), hexSize, usbWriteTimeout);
+            delete hex;
+        } else if (strcmp(buf, "start_stream") == 0) {
+            usbDumpRawFrames = true;
+        } else if (strcmp(buf, "stop_stream") == 0) {
+            usbDumpRawFrames = false;
+        } else {
+            usb->print("Unrecognized command\r\n", usbWriteTimeout);
+        }
+    }
+    iprintf("usbInteractiveThread min free stack %d\n",
+            MemoryProfiling::getAbsoluteFreeStack());
+}
+
+void *Application::usbFrameOutputThreadMainTramp(void *p)
+{
+    static_cast<Application *>(p)->usbFrameOutputThreadMain();
+    return nullptr;
+}
+
+void Application::usbFrameOutputThreadMain()
+{
+    const int hexSize = (2+834*sizeof(uint16_t)*2+2)*2;
+    char *hex = new char[hexSize];
+
+    while(ui.lifecycle != UI::Quit)
+    {
+        std::unique_ptr<MLX90640RawFrame> rawFrame;
+        {
+            MLX90640RawFrame *pointer=nullptr;
+            usbOutputQueue.get(pointer);
+            rawFrame.reset(pointer);
+        }
+        if (!rawFrame) continue;
+        if (!usb->connected())
+        {
+            usbDumpRawFrames = false;
+        } else if (usbDumpRawFrames && !ui.paused) {
+            char *p = hex;
+            *p++ = '1'; *p++ = '=';
+            p = hexDump(reinterpret_cast<const uint8_t *>(rawFrame->subframe[0]), 834*2, p);
+            *p++ = '\r'; *p++ = '\n';
+            *p++ = '2'; *p++ = '=';
+            p = hexDump(reinterpret_cast<const uint8_t *>(rawFrame->subframe[1]), 834*2, p);
+            *p++ = '\r'; *p++ = '\n';
+            rawFrame.reset(nullptr);
+            usb->write(reinterpret_cast<uint8_t *>(hex), hexSize, usbWriteTimeout);
+        }
+    }
+    delete hex;
+
+    iprintf("usbOutputThread min free stack %d\n",
             MemoryProfiling::getAbsoluteFreeStack());
 }
