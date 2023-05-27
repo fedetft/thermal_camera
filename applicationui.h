@@ -322,6 +322,7 @@ void ApplicationUI<IOHandler>::drawStaticPartOfMenuScreen(mxgui::DrawingContext&
     dc.clear(mxgui::black);
     //For mxgui::point coordinates see ui-mockup-menu-screen.png
     dc.setFont(smallFont);
+    dc.setTextColor(std::make_pair(mxgui::white,mxgui::black));
     dc.write(mxgui::Point(66,12),"Tmax");
     dc.write(mxgui::Point(66,25),"Tmin");
     dc.drawImage(mxgui::Point(114,13),smallcelsiusicon);
