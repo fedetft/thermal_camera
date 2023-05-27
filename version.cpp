@@ -4,4 +4,4 @@
 #define TC_VERSION "0000000"
 #endif
 
-const char *thermal_camera_version = "thermal_camera " TC_VERSION;
+char const thermal_camera_version[] = "thermal_camera " TC_VERSION;
