@@ -34,16 +34,6 @@ const int scaleFactor=4;
 #endif
 
 /**
- * Raw MLX90640 frame as read from the sensor by MLX90640::readFrame()
- * Needs to be passed to MLX90640::processFrame() to compute temperatures
- */
-class MLX90640RawFrame
-{
-public:
-    unsigned short subframe[2][834]; // Heavy object! ~3.4 KByte
-};
-
-/**
  * Processed MLX90640 frame with temperature data. Temperature is stored
  * as an array of short, one per pixel, which contain the temperature in
  * degrees celsius multiplied by a scale factor so as to preserve a resolution
