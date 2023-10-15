@@ -86,7 +86,7 @@ void DeviceFrameSource::ioThreadMain(std::string devicePath)
     fprintf(stderr, "DeviceFrameSource: stopped\n");
 }
 
-size_t DeviceFrameSource::parseHex(const char *hex, size_t bufSz, void *buf)
+static size_t parseHex(const char *hex, size_t bufSz, void *buf)
 {
     uint8_t tmp = 0;
     uint8_t *outp = reinterpret_cast<uint8_t *>(buf);
@@ -106,12 +106,55 @@ size_t DeviceFrameSource::parseHex(const char *hex, size_t bufSz, void *buf)
     return outp - reinterpret_cast<uint8_t *>(buf);
 }
 
+// Here comes the dragon...
+static void setTTYAttr(int fd)
+{
+    struct termios tty;
+    // We do not start with a zeroed out termios structure because the Internet
+    // says you shall not do that. We are rewriting all the members anyway
+    // though (except for c_cc which is fairly useless anyway)
+    tcgetattr(fd, &tty);
+    
+    #if defined(__linux__)
+    // Linux wants its baud rate also set here, otherwise it ignores ICANON
+    // for some reason. Notice that B300 is an index for a bitfield reserved
+    // for the baud rate in c_cflag.
+    tty.c_cflag = CLOCAL | CREAD | CS8 | B300;
+    #else
+    // On more sane systems, you just use cfseti/ospeed, and B300 is defined
+    // as the integer 300. There is **NO** corresponding field in c_cflag.
+    tty.c_cflag = CLOCAL | CREAD | CS8;
+    #endif
+    #if defined(__linux__)
+    // On Linux, without ICANON only the last 64 bytes or so are returned by
+    // any read (even a raw call to read(2)). The others go to the Big Byte
+    // Bucket in the Sky apparently.
+    tty.c_lflag = ICANON;
+    #else
+    // On macOS (and I suppose the BSDs), the C standard library cannot read
+    // anything and blocks forever. Maybe it's trying to buffer past the first
+    // newline? Do not ask me why, nothing makes sense here anyway.
+    tty.c_lflag = 0;
+    #endif
+    tty.c_iflag = IGNCR;
+    tty.c_oflag = 0;
+
+    tty.c_cc[VTIME] = 0; // Inter-character timer unused
+    tty.c_cc[VMIN] = 1;  // Blocking read until 1 character received
+
+    // These baud rates are fake and do not matter anyway
+    cfsetospeed(&tty, (speed_t)300);
+    cfsetispeed(&tty, (speed_t)300);
+
+    tcsetattr(fd, TCSANOW, &tty);
+}
+
 void DeviceFrameSource::connect(const char *cstr)
 {
     fprintf(stderr, "new connection attempt to %s\n", cstr);
 
-    // non blocking IO otherwise the incorrect default TTY setup will make open
-    // hang waiting for a DTS signal which will never arrive
+    // When opening, use non-blocking IO. Otherwise the incorrect default TTY
+    // setup may make us hang waiting for a DTS signal which will never arrive
     int fd = open(cstr, O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd == -1) {
         fprintf(stderr, "open error\n");
@@ -120,17 +163,7 @@ void DeviceFrameSource::connect(const char *cstr)
 
     flock(fd, LOCK_EX | LOCK_NB);
     tcflush(fd, TCIOFLUSH);
-
-    struct termios tio = {0};
-    cfsetispeed(&tio, 300); // baud rates are fake and do not matter
-    cfsetospeed(&tio, 300);
-    tio.c_iflag = IGNCR;
-    tio.c_oflag = 0;
-    tio.c_cflag = CS8 | CLOCAL | CREAD;
-    tio.c_lflag = 0;
-    tio.c_cc[VTIME] = 0; // Inter-character timer unused
-    tio.c_cc[VMIN] = 1;  // Blocking read until 1 character received
-    tcsetattr(fd, TCSANOW, &tio);
+    setTTYAttr(fd);
 
     // Stop output from previous commands
     // Do this before C file buffering comes into play
@@ -139,25 +172,17 @@ void DeviceFrameSource::connect(const char *cstr)
     usleep(100 * 1000);
     tcflush(fd, TCIOFLUSH);
 
-    // Close and reopen otherwise... we stop receiving data sometimes?????
+    // Close and reopen otherwise on macOS an arbitrary amount of bytes may be
+    // also flushed to the drain in the future. Reconfigure the TTY as macOS
+    // forgets the tty config as soon as the file is closed (which makes sense
+    // but is highly inconvenient)
     close(fd);
     fd = open(cstr, O_RDWR | O_NOCTTY | O_NONBLOCK);
-
     flock(fd, LOCK_EX | LOCK_NB);
     tcflush(fd, TCIOFLUSH);
+    setTTYAttr(fd);
 
-    // struct termios tio = {0};
-    cfsetispeed(&tio, 300);
-    cfsetospeed(&tio, 300);
-    tio.c_iflag = IGNCR;
-    tio.c_oflag = 0;
-    tio.c_cflag = CS8 | CLOCAL | CREAD;
-    tio.c_lflag = 0;
-    tio.c_cc[VTIME] = 0; // Inter-character timer unused
-    tio.c_cc[VMIN] = 1;  // Blocking read until 1 character received
-    tcsetattr(fd, TCSANOW, &tio);
-
-    // Set file configuration back to blocking mode
+    // Exit non-blocking mode
     fcntl(fd, F_SETFL, 0);
 
     FILE *fp = fdopen(fd, "r+");

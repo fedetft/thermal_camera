@@ -61,7 +61,6 @@ class DeviceFrameSource : public FrameSource
 
     void ioThreadMain(std::string devicePath);
     void connect(const char *cstr);
-    size_t parseHex(const char *in, size_t bufSz, void *out);
 public:
     DeviceFrameSource(std::string devicePath);
     ~DeviceFrameSource()
