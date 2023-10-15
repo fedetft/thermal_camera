@@ -33,26 +33,6 @@
 #include "drivers/MLX90640_API.h"
 
 /**
- * Raw MLX90640 EEPROM contents
- */
-class MLX90640EEPROM
-{
-public:
-    static const unsigned int eepromSize=832;
-    unsigned short eeprom[eepromSize]; // Heavy object! ~1.7 KByte
-};
-
-/**
- * Raw MLX90640 frame as read from the sensor by MLX90640::readFrame()
- * Needs to be passed to MLX90640::processFrame() to compute temperatures
- */
-class MLX90640RawFrame
-{
-public:
-    unsigned short subframe[2][834]; // Heavy object! ~3.4 KByte
-};
-
-/**
  * Possible refresh rates of the MLX90640. Note that the framerate is
  * expressed in full frames per second, while the datasheet expresses it in
  * nummber of half-frames per second.

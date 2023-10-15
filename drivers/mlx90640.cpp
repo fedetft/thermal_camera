@@ -84,14 +84,7 @@ bool MLX90640::readFrame(MLX90640RawFrame *rawFrame)
 
 void MLX90640::processFrame(const MLX90640RawFrame *rawFrame, MLX90640Frame *frame, float emissivity)
 {
-    const float taShift=8.f; //Default shift for MLX90640 in open air
-    for(int i=0;i<2;i++)
-    {
-        float vdd=MLX90640_GetVdd(rawFrame->subframe[i],&params);
-        float Ta=MLX90640_GetTa(rawFrame->subframe[i],&params,vdd);
-        float Tr=Ta-taShift; //Reflected temperature based on the sensor ambient temperature
-        MLX90640_CalculateToShort(rawFrame->subframe[i],&params,emissivity,vdd,Ta,Tr,frame->temperature);
-    }
+    rawFrame->process(frame, params, emissivity);
 }
 
 bool MLX90640::readSpecificSubFrame(int index, unsigned short rawFrame[834])
