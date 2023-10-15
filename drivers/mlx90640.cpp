@@ -117,13 +117,19 @@ bool MLX90640::readSubFrame(unsigned short rawFrame[834])
     //explicit sleeps to enforse a poll period dependent on the framerate
     this_thread::sleep_until(lastFrameReady+waitTime());
     unsigned short statusReg;
+    bool pollingError=false;
     for(;;)
     {
-        if(read(0x8000,1,&statusReg)==false) return false;
+        if(read(0x8000,1,&statusReg)==false) { pollingError=true; break; }
         if(statusReg & (1<<3)) break;
         this_thread::sleep_for(pollTime());
     }
+    // Notice we are setting lastFrameReady even if reading from the sensor
+    // failed. This guarantees the next attempt will sleep anyway before
+    // polling. If that sleep is not performed, and the reads continue to fail,
+    // the read attempts will enter an infinite loop.
     lastFrameReady=chrono::system_clock::now();
+    if(pollingError) return false;
     const int maxRetry=3;
     for(int i=0;i<maxRetry;i++)
     {
