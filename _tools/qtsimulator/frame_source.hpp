@@ -29,11 +29,18 @@
 
 #include "../../drivers/mlx90640frame.h"
 #include <memory>
+#include <string>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
 class FrameSource
 {
 public:
     virtual std::unique_ptr<MLX90640Frame> getLastFrame() = 0;
+    virtual void setEmissivity(float emiss) {};
+    virtual void stop() {};
+    virtual ~FrameSource() = default;
 };
 
 class DummyFrameSource : public FrameSource
@@ -41,4 +48,36 @@ class DummyFrameSource : public FrameSource
 public:
     DummyFrameSource() {}
     std::unique_ptr<MLX90640Frame> getLastFrame() override;
+};
+
+class DeviceFrameSource : public FrameSource
+{
+    MLX90640Frame lastFrame = { 0 };
+    MLX90640EEPROM eeprom;
+    std::mutex lastFrameMutex;
+    std::thread ioThread;
+    std::atomic<bool> stopped;
+    std::atomic<float> emiss;
+
+    void ioThreadMain(std::string devicePath);
+    void connect(const char *cstr);
+    size_t parseHex(const char *in, size_t bufSz, void *out);
+public:
+    DeviceFrameSource(std::string devicePath);
+    ~DeviceFrameSource()
+    {
+        stop();
+    }
+    std::unique_ptr<MLX90640Frame> getLastFrame() override;
+    void setEmissivity(float _emiss) override
+    {
+        emiss = _emiss;
+    }
+    void stop() override
+    {
+        if (!stopped) {
+            stopped = true;
+            ioThread.join();
+        }
+    }
 };

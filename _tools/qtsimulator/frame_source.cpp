@@ -26,6 +26,11 @@
  ***************************************************************************/
 
 #include "frame_source.hpp"
+#include <cstdio>
+#include <unistd.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <sys/file.h>
 
 std::unique_ptr<MLX90640Frame> DummyFrameSource::getLastFrame()
 {
@@ -56,3 +61,151 @@ std::unique_ptr<MLX90640Frame> DummyFrameSource::getLastFrame()
         76, 74, 76, 72, 79, 85,108,108,113,115,119,119,117,115,111,110,110,110,110,108,108,107,105,100, 79, 77, 73, 73, 70, 71, 70, 68}};
     return std::unique_ptr<MLX90640Frame>(new MLX90640Frame(testFrame));
 }
+
+DeviceFrameSource::DeviceFrameSource(std::string devicePath)
+{
+    stopped = false;
+    emiss = 0.95f;
+    ioThread = std::thread(&DeviceFrameSource::ioThreadMain, this, devicePath);
+}
+
+std::unique_ptr<MLX90640Frame> DeviceFrameSource::getLastFrame()
+{
+    std::lock_guard<std::mutex> lock(lastFrameMutex);
+    return std::unique_ptr<MLX90640Frame>(new MLX90640Frame(lastFrame));
+}
+
+void DeviceFrameSource::ioThreadMain(std::string devicePath)
+{
+    const char *cstr = devicePath.c_str();
+    connect(cstr);
+    while (!stopped) {
+        sleep(1);
+        connect(cstr);
+    }
+    fprintf(stderr, "DeviceFrameSource: stopped\n");
+}
+
+size_t DeviceFrameSource::parseHex(const char *hex, size_t bufSz, void *buf)
+{
+    uint8_t tmp = 0;
+    uint8_t *outp = reinterpret_cast<uint8_t *>(buf);
+    if (bufSz == 0) return 0;
+    for (int i = 0;; i++)
+    {
+        char c = hex[i];
+        if ('0' <= c && c <= '9') tmp = tmp >> 4 | ((c - '0') << 4);
+        else if ('A' <= c && c <= 'F') tmp = tmp >> 4 | ((c - 'A' + 10) << 4);
+        else break;
+        if (i % 2)
+        {
+            *outp++ = tmp;
+            if (--bufSz == 0) break;
+        }
+    }
+    return outp - reinterpret_cast<uint8_t *>(buf);
+}
+
+void DeviceFrameSource::connect(const char *cstr)
+{
+    fprintf(stderr, "new connection attempt to %s\n", cstr);
+
+    // non blocking IO otherwise the incorrect default TTY setup will make open
+    // hang waiting for a DTS signal which will never arrive
+    int fd = open(cstr, O_RDWR | O_NOCTTY | O_NONBLOCK);
+    if (fd == -1) {
+        fprintf(stderr, "open error\n");
+        return;
+    }
+
+    flock(fd, LOCK_EX | LOCK_NB);
+    tcflush(fd, TCIOFLUSH);
+
+    struct termios tio = {0};
+    cfsetispeed(&tio, 300); // baud rates are fake and do not matter
+    cfsetospeed(&tio, 300);
+    tio.c_iflag = IGNCR;
+    tio.c_oflag = 0;
+    tio.c_cflag = CS8 | CLOCAL | CREAD;
+    tio.c_lflag = 0;
+    tio.c_cc[VTIME] = 0; // Inter-character timer unused
+    tio.c_cc[VMIN] = 1;  // Blocking read until 1 character received
+    tcsetattr(fd, TCSANOW, &tio);
+
+    // Stop output from previous commands
+    // Do this before C file buffering comes into play
+    write(fd, "\nstop_stream\n", 13);
+    tcdrain(fd);
+    usleep(100 * 1000);
+    tcflush(fd, TCIOFLUSH);
+
+    // Close and reopen otherwise... we stop receiving data sometimes?????
+    close(fd);
+    fd = open(cstr, O_RDWR | O_NOCTTY | O_NONBLOCK);
+
+    flock(fd, LOCK_EX | LOCK_NB);
+    tcflush(fd, TCIOFLUSH);
+
+    // struct termios tio = {0};
+    cfsetispeed(&tio, 300);
+    cfsetospeed(&tio, 300);
+    tio.c_iflag = IGNCR;
+    tio.c_oflag = 0;
+    tio.c_cflag = CS8 | CLOCAL | CREAD;
+    tio.c_lflag = 0;
+    tio.c_cc[VTIME] = 0; // Inter-character timer unused
+    tio.c_cc[VMIN] = 1;  // Blocking read until 1 character received
+    tcsetattr(fd, TCSANOW, &tio);
+
+    // Set file configuration back to blocking mode
+    fcntl(fd, F_SETFL, 0);
+
+    FILE *fp = fdopen(fd, "r+");
+    if (fp == NULL) {
+        fprintf(stderr, "fdopen error\n");
+        close(fd);
+        return;
+    }
+
+    fprintf(stderr, "connection to %s established\n", cstr);
+
+    const size_t charBufSz = 10000;
+    char buf[charBufSz];
+
+    fprintf(fp, "get_eeprom\n");
+    fgets(buf, charBufSz, fp);
+    fprintf(stderr, "eeprom=%s", buf);
+    size_t sz = parseHex(buf, sizeof(eeprom.eeprom), eeprom.eeprom);
+    paramsMLX90640 mlx90640;
+    MLX90640_ExtractParameters(eeprom.eeprom, &mlx90640);
+
+    fprintf(fp, "start_stream\n");
+
+    while (!stopped && !feof(fp))
+    {
+        MLX90640RawFrame rawFrame;
+        fgets(buf, charBufSz, fp);
+        if (feof(fp))
+            break;
+        sz = parseHex(buf+2, sizeof(rawFrame.subframe[0]), rawFrame.subframe[0]);
+        fgets(buf, charBufSz, fp);
+        if (feof(fp))
+            break;
+        sz = parseHex(buf+2, sizeof(rawFrame.subframe[1]), rawFrame.subframe[1]);
+
+        MLX90640Frame newFrame;
+        rawFrame.process(&newFrame, mlx90640, emiss.load());
+        {
+            std::lock_guard<std::mutex> lock(lastFrameMutex);
+            lastFrame = newFrame;
+        }
+    }
+
+    fprintf(fp, "stop_stream\n");
+
+    flockfile(fp);
+    fclose(fp);
+
+    fprintf(stderr, "connection to %s closed\n", cstr);
+}
+

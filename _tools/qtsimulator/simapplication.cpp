@@ -32,6 +32,7 @@
 #include "mxgui/level2/input.h"
 #include <thread>
 #include <chrono>
+#include <QApplication>
 
 using namespace mxgui;
 
@@ -46,9 +47,11 @@ public:
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(700));
         ui.lifecycle = ApplicationUI<ApplicationSimulator>::Ready;
+        frameSrc->setEmissivity(ui.options.emissivity);
         ui.updateFrame(frameSrc->getLastFrame().release());
         while (ui.lifecycle != ApplicationUI<ApplicationSimulator>::Quit) {
             ui.update();
+            frameSrc->setEmissivity(ui.options.emissivity);
             ui.updateFrame(frameSrc->getLastFrame().release());
             std::this_thread::sleep_for(std::chrono::microseconds(16666));
         }
@@ -105,8 +108,14 @@ private:
 
 ENTRY()
 {
-    DummyFrameSource source;
-    ApplicationSimulator application(&source);
+    std::unique_ptr<FrameSource> source;
+    if (qApp->arguments().size() == 2) {
+        std::string path = qApp->arguments().at(1).toStdString();
+        source.reset(reinterpret_cast<FrameSource *>(new DeviceFrameSource(path)));
+    } else {
+        source.reset(reinterpret_cast<FrameSource *>(new DummyFrameSource()));
+    }
+    ApplicationSimulator application(source.get());
     application.run();
     return 0;
 }
