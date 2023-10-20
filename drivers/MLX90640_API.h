@@ -18,6 +18,8 @@
 /*
  * Modified by TFT: added MLX90640_CalculateToShort, some optimizations,
  * made compatible with Miosix
+ * Modified by DC: Removed I2C interface functions, now replaced with a new
+ * optimized driver in mlx90640.h.
  */
 
 #ifndef _MLX640_API_H_
@@ -59,21 +61,11 @@ typedef struct
     uint16_t outlierPixels[5];  
 } paramsMLX90640;
 
-int MLX90640_DumpEE(uint8_t slaveAddr, uint16_t *eeData);
-int MLX90640_GetFrameData(uint8_t slaveAddr, uint16_t *frameData);
 int MLX90640_ExtractParameters(const uint16_t *eeData, paramsMLX90640 *mlx90640);
 float MLX90640_GetVdd(const uint16_t *frameData, const paramsMLX90640 *params);
 float MLX90640_GetTa(const uint16_t *frameData, const paramsMLX90640 *params, float vdd);
 void MLX90640_GetImage(const uint16_t *frameData, const paramsMLX90640 *params, float *result);
 void MLX90640_CalculateTo(const uint16_t *frameData, const paramsMLX90640 *params, float emissivity, float vdd, float ta, float tr, float *result);
 void MLX90640_CalculateToShort(const uint16_t *frameData, const paramsMLX90640 *params, float emissivity, float vdd, float ta, float tr, short *result);
-int MLX90640_SetResolution(uint8_t slaveAddr, uint8_t resolution);
-int MLX90640_GetCurResolution(uint8_t slaveAddr);
-int MLX90640_SetRefreshRate(uint8_t slaveAddr, uint8_t refreshRate);   
-int MLX90640_GetRefreshRate(uint8_t slaveAddr);  
-int MLX90640_GetSubPageNumber(const uint16_t *frameData);
-int MLX90640_GetCurMode(uint8_t slaveAddr); 
-int MLX90640_SetInterleavedMode(uint8_t slaveAddr);
-int MLX90640_SetChessMode(uint8_t slaveAddr);
     
 #endif

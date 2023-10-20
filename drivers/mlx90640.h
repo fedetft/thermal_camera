@@ -111,6 +111,8 @@ public:
      * to compute the temperatures
      */
     void processFrame(const MLX90640RawFrame *rawFrame, MLX90640Frame *frame, float emissivity);
+
+    const MLX90640EEPROM& getEEPROM();
     
 private:
     /**
@@ -164,5 +166,6 @@ private:
     const unsigned char devAddr;
     MLX90640Refresh rr;
     std::chrono::time_point<std::chrono::system_clock> lastFrameReady;
+    MLX90640EEPROM eeprom;
     paramsMLX90640 params; // Heavy object! ~11 KByte
 };

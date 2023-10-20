@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico and Daniele Cattaneo          *
+ *   Copyright (C) 2023 by Daniele Cattaneo                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,69 +27,56 @@
 
 #pragma once
 
+#include "../../drivers/mlx90640frame.h"
 #include <memory>
-#include <miosix.h>
-#include <mxgui/display.h>
-#include <drivers/stm32f2_f4_i2c.h>
-#include <drivers/mlx90640.h>
-#include <drivers/hwmapping.h>
-#include <drivers/usb_tinyusb.h>
-#include "renderer.h"
-#include "applicationui.h"
+#include <string>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
-/**
- * Main application class. Decorates ApplicationUI with hardware I/O code.
- */
-class Application: IOHandlerBase
+class FrameSource
 {
 public:
-    
-    Application(mxgui::Display& display);
+    virtual std::unique_ptr<MLX90640Frame> getLastFrame() = 0;
+    virtual void setEmissivity(float emiss) {};
+    virtual void stop() {};
+    virtual ~FrameSource() = default;
+};
 
-    void run();
+class DummyFrameSource : public FrameSource
+{
+public:
+    DummyFrameSource() {}
+    std::unique_ptr<MLX90640Frame> getLastFrame() override;
+};
 
-    ButtonState checkButtons();
+class DeviceFrameSource : public FrameSource
+{
+    MLX90640Frame lastFrame = { 0 };
+    MLX90640EEPROM eeprom;
+    std::mutex lastFrameMutex;
+    std::thread ioThread;
+    std::atomic<bool> stopped;
+    std::atomic<float> emiss;
 
-    BatteryLevel checkBatteryLevel();
-    
-    bool checkUSBConnected();
-
-    void setPause(bool pause);
-
-    void saveOptions(ApplicationOptions& options);
-    
-private:
-    Application(const Application&)=delete;
-    Application& operator=(const Application&)=delete;
-
-    using UI = ApplicationUI<Application>;
-    
-    static void *sensorThreadMainTramp(void *p);
-    inline void sensorThreadMain();
-    
-    static void *processThreadMainTramp(void *p);
-    inline void processThreadMain();
-
-    static void *renderThreadMainTramp(void *p);
-    inline void renderThreadMain();
-
-    static void *usbThreadMainTramp(void *p);
-    inline void usbThreadMain();
-
-    static void *usbFrameOutputThreadMainTramp(void *p);
-    inline void usbFrameOutputThreadMain();
-
-    miosix::Thread *sensorThread;
-    mxgui::Display& display;
-    UI ui;
-    int prevBatteryVoltage=42; //4.2V
-    std::unique_ptr<miosix::I2C1Master> i2c;
-    std::unique_ptr<MLX90640> sensor;
-    std::unique_ptr<USBCDC> usb;
-    miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
-    miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
-    volatile bool usbDumpRawFrames=false;
-    miosix::Queue<MLX90640RawFrame*, 1> usbOutputQueue;
-
-    const unsigned long long usbWriteTimeout = 50ULL * 1000000ULL; // 50ms
+    void ioThreadMain(std::string devicePath);
+    void connect(const char *cstr);
+public:
+    DeviceFrameSource(std::string devicePath);
+    ~DeviceFrameSource()
+    {
+        stop();
+    }
+    std::unique_ptr<MLX90640Frame> getLastFrame() override;
+    void setEmissivity(float _emiss) override
+    {
+        emiss = _emiss;
+    }
+    void stop() override
+    {
+        if (!stopped) {
+            stopped = true;
+            ioThread.join();
+        }
+    }
 };

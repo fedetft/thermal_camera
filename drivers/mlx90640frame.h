@@ -27,21 +27,7 @@
 
 #pragma once
 
-#ifdef _MIOSIX
 #include "MLX90640_API.h"
-#else
-const int scaleFactor=4;
-#endif
-
-/**
- * Raw MLX90640 frame as read from the sensor by MLX90640::readFrame()
- * Needs to be passed to MLX90640::processFrame() to compute temperatures
- */
-class MLX90640RawFrame
-{
-public:
-    unsigned short subframe[2][834]; // Heavy object! ~3.4 KByte
-};
 
 /**
  * Processed MLX90640 frame with temperature data. Temperature is stored
@@ -65,4 +51,46 @@ public:
      * point, compensating for the sensor orientation on the board
      */
     short getTempAt(int x, int y) { return temperature[(nx-1-x)+y*nx]; }
+};
+
+/**
+ * Raw MLX90640 EEPROM contents
+ */
+class MLX90640EEPROM
+{
+public:
+    static const unsigned int eepromSize=832;
+    unsigned short eeprom[eepromSize]; // Heavy object! ~1.7 KByte
+};
+
+/**
+ * Raw MLX90640 frame as read from the sensor by MLX90640::readFrame()
+ */
+class MLX90640RawFrame
+{
+public:
+    unsigned short subframe[2][834]; // Heavy object! ~3.4 KByte
+
+    /**
+     * Processes this raw frame, computing the themperature of each pixel.
+     * This is a compute-intensive task that requires no interaction with the
+     * hardware.
+     * \param output pointer to a caller-allocated MLX90640Frame object where
+     * the pixel temperatures will be stored
+     * \param params reference to the calibration parameters of the MLX90640
+     * sensor, as parsed from the internal EEPROM
+     * \param emissivity the user-selected emissivity value, that is necessary
+     * to compute the temperatures
+     */
+    void process(MLX90640Frame *output, paramsMLX90640& params, float emissivity) const
+    {
+        const float taShift=8.f; //Default shift for MLX90640 in open air
+        for(int i=0;i<2;i++)
+        {
+            float vdd=MLX90640_GetVdd(this->subframe[i],&params);
+            float Ta=MLX90640_GetTa(this->subframe[i],&params,vdd);
+            float Tr=Ta-taShift; //Reflected temperature based on the sensor ambient temperature
+            MLX90640_CalculateToShort(this->subframe[i],&params,emissivity,vdd,Ta,Tr,output->temperature);
+        }
+    }
 };

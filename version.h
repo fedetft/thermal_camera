@@ -1,3 +1,3 @@
 #pragma once
 
-extern const char *thermal_camera_version;
+extern char const thermal_camera_version[];

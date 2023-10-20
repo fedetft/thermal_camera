@@ -1,5 +1,5 @@
 /***************************************************************************
- *   Copyright (C) 2022 by Terraneo Federico and Daniele Cattaneo          *
+ *   Copyright (C) 2023 by Daniele Cattaneo                                *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -27,69 +27,36 @@
 
 #pragma once
 
-#include <memory>
-#include <miosix.h>
-#include <mxgui/display.h>
-#include <drivers/stm32f2_f4_i2c.h>
-#include <drivers/mlx90640.h>
-#include <drivers/hwmapping.h>
-#include <drivers/usb_tinyusb.h>
-#include "renderer.h"
-#include "applicationui.h"
+#include "miosix.h"
 
-/**
- * Main application class. Decorates ApplicationUI with hardware I/O code.
- */
-class Application: IOHandlerBase
+class USBCDC
 {
 public:
-    
-    Application(mxgui::Display& display);
+    USBCDC(miosix::Priority intSvcThreadPrio);
+    ~USBCDC();
 
-    void run();
+    bool connected();
 
-    ButtonState checkButtons();
+    void putChar(char c);
+    void write(const uint8_t *buf, int size);
+    bool write(const uint8_t *buf, int size, long long maxWait);
+    void print(const char *str);
+    bool print(const char *str, long long maxWait);
 
-    BatteryLevel checkBatteryLevel();
-    
-    bool checkUSBConnected();
+    bool waitForInput(long long maxWait);
+    int getChar();
+    bool readLine(char *buf, int size);
 
-    void setPause(bool pause);
+    // Forces all I/O functions in execution in other threads to terminate
+    // as soon as possible. Any subsequent I/O operation will fail.
+    void prepareShutdown();
 
-    void saveOptions(ApplicationOptions& options);
-    
 private:
-    Application(const Application&)=delete;
-    Application& operator=(const Application&)=delete;
+    static void *thread(void *);
 
-    using UI = ApplicationUI<Application>;
-    
-    static void *sensorThreadMainTramp(void *p);
-    inline void sensorThreadMain();
-    
-    static void *processThreadMainTramp(void *p);
-    inline void processThreadMain();
+    bool waitForInputUnlocked(miosix::Lock<miosix::FastMutex>& lock, long long deadline);
+    int getCharUnlocked(miosix::Lock<miosix::FastMutex>& lock);
 
-    static void *renderThreadMainTramp(void *p);
-    inline void renderThreadMain();
-
-    static void *usbThreadMainTramp(void *p);
-    inline void usbThreadMain();
-
-    static void *usbFrameOutputThreadMainTramp(void *p);
-    inline void usbFrameOutputThreadMain();
-
-    miosix::Thread *sensorThread;
-    mxgui::Display& display;
-    UI ui;
-    int prevBatteryVoltage=42; //4.2V
-    std::unique_ptr<miosix::I2C1Master> i2c;
-    std::unique_ptr<MLX90640> sensor;
-    std::unique_ptr<USBCDC> usb;
-    miosix::Queue<MLX90640RawFrame*, 1> rawFrameQueue;
-    miosix::Queue<MLX90640Frame*, 1> processedFrameQueue;
-    volatile bool usbDumpRawFrames=false;
-    miosix::Queue<MLX90640RawFrame*, 1> usbOutputQueue;
-
-    const unsigned long long usbWriteTimeout = 50ULL * 1000000ULL; // 50ms
+    miosix::Thread *tinyusbThread;
+    volatile bool forceEOF = false;
 };

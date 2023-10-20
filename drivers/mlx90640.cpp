@@ -49,16 +49,19 @@ MLX90640Refresh refreshFromInt(int rate)
 MLX90640::MLX90640(I2C1Master *i2c, unsigned char devAddr)
     : i2c(i2c), devAddr(devAddr<<1) //Make room for r/w bit
 {
-    const unsigned int eepromSize=832;
-    unsigned short eeprom[eepromSize]; // Heavy object! ~1.7 KByte
     // Wait 80ms as recommended by the datasheet.
     // If we don't do this, on some sensors the EEPROM readout might be glitched
     std::this_thread::sleep_for(80ms);
-    if(read(0x2400,eepromSize,eeprom)==false || MLX90640_ExtractParameters(eeprom,&params))
+    if(read(0x2400,MLX90640EEPROM::eepromSize,eeprom.eeprom)==false || MLX90640_ExtractParameters(eeprom.eeprom,&params))
         throw runtime_error("EEPROM failure");
     if(setRefresh(MLX90640Refresh::R1)==false)
         throw runtime_error("I2C failure");
     lastFrameReady=chrono::system_clock::now();
+}
+
+const MLX90640EEPROM& MLX90640::getEEPROM()
+{
+    return eeprom;
 }
 
 bool MLX90640::setRefresh(MLX90640Refresh rr)
@@ -81,14 +84,7 @@ bool MLX90640::readFrame(MLX90640RawFrame *rawFrame)
 
 void MLX90640::processFrame(const MLX90640RawFrame *rawFrame, MLX90640Frame *frame, float emissivity)
 {
-    const float taShift=8.f; //Default shift for MLX90640 in open air
-    for(int i=0;i<2;i++)
-    {
-        float vdd=MLX90640_GetVdd(rawFrame->subframe[i],&params);
-        float Ta=MLX90640_GetTa(rawFrame->subframe[i],&params,vdd);
-        float Tr=Ta-taShift; //Reflected temperature based on the sensor ambient temperature
-        MLX90640_CalculateToShort(rawFrame->subframe[i],&params,emissivity,vdd,Ta,Tr,frame->temperature);
-    }
+    rawFrame->process(frame, params, emissivity);
 }
 
 bool MLX90640::readSpecificSubFrame(int index, unsigned short rawFrame[834])
@@ -114,13 +110,19 @@ bool MLX90640::readSubFrame(unsigned short rawFrame[834])
     //explicit sleeps to enforse a poll period dependent on the framerate
     this_thread::sleep_until(lastFrameReady+waitTime());
     unsigned short statusReg;
+    bool pollingError=false;
     for(;;)
     {
-        if(read(0x8000,1,&statusReg)==false) return false;
+        if(read(0x8000,1,&statusReg)==false) { pollingError=true; break; }
         if(statusReg & (1<<3)) break;
         this_thread::sleep_for(pollTime());
     }
+    // Notice we are setting lastFrameReady even if reading from the sensor
+    // failed. This guarantees the next attempt will sleep anyway before
+    // polling. If that sleep is not performed, and the reads continue to fail,
+    // the read attempts will enter an infinite loop.
     lastFrameReady=chrono::system_clock::now();
+    if(pollingError) return false;
     const int maxRetry=3;
     for(int i=0;i<maxRetry;i++)
     {
