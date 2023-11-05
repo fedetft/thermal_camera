@@ -64,6 +64,7 @@ struct ApplicationOptions
 {
     int frameRate=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
     float emissivity=0.95f;
+    int brightness=15;
 };
 
 class IOHandlerBase
@@ -176,6 +177,7 @@ private:
         Back = 0,
         Emissivity,
         FrameRate,
+        Brightness,
         SaveChanges,
         NumEntries
     };
@@ -398,6 +400,10 @@ void ApplicationUI<IOHandler>::drawMenuEntry(mxgui::DrawingContext& dc, int id)
             sniprintf(buffer, 8, "%d", options.frameRate);
             _drawMenuEntry(dc, FrameRate, "Frame rate", buffer);
             break;
+        case Brightness:
+            sniprintf(buffer, 8, "%d", options.brightness);
+            _drawMenuEntry(dc, Brightness, "Brightness", buffer);
+            break;
         case SaveChanges:
             _drawMenuEntry(dc, SaveChanges, "Save changes");
             break;
@@ -421,6 +427,12 @@ void ApplicationUI<IOHandler>::updateMenu(mxgui::DrawingContext& dc)
                 if(options.frameRate>=16) options.frameRate=1;
                 else options.frameRate*=2;
                 drawMenuEntry(dc, FrameRate);
+                break;
+            case Brightness: 
+                if(options.brightness>=15) options.brightness=0;
+                else options.brightness+=1;
+                display.setBrightness(options.brightness * 6);
+                drawMenuEntry(dc, Brightness);
                 break;
             case SaveChanges:
                 ioHandler.saveOptions(options);
