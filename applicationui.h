@@ -159,8 +159,8 @@ private:
 
     mxgui::Display& display;
     std::unique_ptr<ThermalImageRenderer> renderer;
-    std::unique_ptr<MLX90640Frame> lastFrame;
-    std::recursive_mutex lastFrameMutex;
+    std::mutex lastFrameMutex;
+    std::shared_ptr<MLX90640Frame> lastFrame;
     IOHandler& ioHandler;
     ButtonEdgeDetector<true> upBtn;
     ButtonEdgeDetector<true> onBtn;
@@ -206,14 +206,15 @@ void ApplicationUI<IOHandler>::updateFrame(MLX90640Frame *processedFrame)
 {
     if (processedFrame==nullptr) return; //Happens on shutdown
     if (paused) return;
-    lastFrameMutex.lock();
-    lastFrame.reset(processedFrame);
+    {
+        std::lock_guard<std::mutex> lock(lastFrameMutex);
+        lastFrame = std::shared_ptr<MLX90640Frame>(processedFrame);
+    }
     if (state == Main || state == Menu)
     {
         mxgui::DrawingContext dc(display);
         drawFrame(dc);
     }
-    lastFrameMutex.unlock();
 }
 
 template<class IOHandler>
@@ -464,15 +465,19 @@ void ApplicationUI<IOHandler>::enterShutdown(mxgui::DrawingContext& dc)
 template<class IOHandler>
 void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
 {
-    lastFrameMutex.lock();
-    if (lastFrame.get()!=nullptr)
+    std::shared_ptr<MLX90640Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(lastFrameMutex);
+        frame = lastFrame;
+    }
+    if (frame.get()!=nullptr)
     {
         #if 0 && defined(_MIOSIX)
         auto t1 = miosix::getTime();
         #endif
         bool smallCached=(state == Menu); //Cache now if the main thread changes it
-        if(smallCached==false) renderer->render(lastFrame.get());
-        else renderer->renderSmall(lastFrame.get());
+        if(smallCached==false) renderer->render(frame.get());
+        else renderer->renderSmall(frame.get());
         #if 0 && defined(_MIOSIX)
         auto t2 = miosix::getTime();
         #endif
@@ -505,7 +510,6 @@ void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
         #endif
         //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
     }
-    lastFrameMutex.unlock();
 }
 
 template<class IOHandler>
