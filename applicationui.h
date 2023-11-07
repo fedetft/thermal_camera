@@ -64,6 +64,7 @@ struct ApplicationOptions
 {
     int frameRate=8; //NOTE: to get beyond 8fps the I2C bus needs to be overclocked too!
     float emissivity=0.95f;
+    int brightness=15;
 };
 
 class IOHandlerBase
@@ -158,8 +159,8 @@ private:
 
     mxgui::Display& display;
     std::unique_ptr<ThermalImageRenderer> renderer;
-    std::unique_ptr<MLX90640Frame> lastFrame;
-    std::recursive_mutex lastFrameMutex;
+    std::mutex lastFrameMutex;
+    std::shared_ptr<MLX90640Frame> lastFrame;
     IOHandler& ioHandler;
     ButtonEdgeDetector<true> upBtn;
     ButtonEdgeDetector<true> onBtn;
@@ -176,6 +177,7 @@ private:
         Back = 0,
         Emissivity,
         FrameRate,
+        Brightness,
         SaveChanges,
         NumEntries
     };
@@ -204,14 +206,15 @@ void ApplicationUI<IOHandler>::updateFrame(MLX90640Frame *processedFrame)
 {
     if (processedFrame==nullptr) return; //Happens on shutdown
     if (paused) return;
-    lastFrameMutex.lock();
-    lastFrame.reset(processedFrame);
+    {
+        std::lock_guard<std::mutex> lock(lastFrameMutex);
+        lastFrame = std::shared_ptr<MLX90640Frame>(processedFrame);
+    }
     if (state == Main || state == Menu)
     {
         mxgui::DrawingContext dc(display);
         drawFrame(dc);
     }
-    lastFrameMutex.unlock();
 }
 
 template<class IOHandler>
@@ -398,6 +401,10 @@ void ApplicationUI<IOHandler>::drawMenuEntry(mxgui::DrawingContext& dc, int id)
             sniprintf(buffer, 8, "%d", options.frameRate);
             _drawMenuEntry(dc, FrameRate, "Frame rate", buffer);
             break;
+        case Brightness:
+            sniprintf(buffer, 8, "%d", options.brightness);
+            _drawMenuEntry(dc, Brightness, "Brightness", buffer);
+            break;
         case SaveChanges:
             _drawMenuEntry(dc, SaveChanges, "Save changes");
             break;
@@ -421,6 +428,12 @@ void ApplicationUI<IOHandler>::updateMenu(mxgui::DrawingContext& dc)
                 if(options.frameRate>=16) options.frameRate=1;
                 else options.frameRate*=2;
                 drawMenuEntry(dc, FrameRate);
+                break;
+            case Brightness: 
+                if(options.brightness>=15) options.brightness=0;
+                else options.brightness+=1;
+                display.setBrightness(options.brightness * 6);
+                drawMenuEntry(dc, Brightness);
                 break;
             case SaveChanges:
                 ioHandler.saveOptions(options);
@@ -452,15 +465,19 @@ void ApplicationUI<IOHandler>::enterShutdown(mxgui::DrawingContext& dc)
 template<class IOHandler>
 void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
 {
-    lastFrameMutex.lock();
-    if (lastFrame.get()!=nullptr)
+    std::shared_ptr<MLX90640Frame> frame;
+    {
+        std::lock_guard<std::mutex> lock(lastFrameMutex);
+        frame = lastFrame;
+    }
+    if (frame.get()!=nullptr)
     {
         #if 0 && defined(_MIOSIX)
         auto t1 = miosix::getTime();
         #endif
         bool smallCached=(state == Menu); //Cache now if the main thread changes it
-        if(smallCached==false) renderer->render(lastFrame.get());
-        else renderer->renderSmall(lastFrame.get());
+        if(smallCached==false) renderer->render(frame.get());
+        else renderer->renderSmall(frame.get());
         #if 0 && defined(_MIOSIX)
         auto t2 = miosix::getTime();
         #endif
@@ -493,7 +510,6 @@ void ApplicationUI<IOHandler>::drawFrame(mxgui::DrawingContext& dc)
         #endif
         //process = 78ms render = 1.9ms draw = 15ms 8Hz scaled short DMA UI
     }
-    lastFrameMutex.unlock();
 }
 
 template<class IOHandler>

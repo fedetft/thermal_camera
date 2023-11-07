@@ -62,6 +62,7 @@ Application::Application(Display& display)
     loadOptions(&ui.options,sizeof(ui.options));
     if(sensor->setRefresh(refreshFromInt(ui.options.frameRate))==false)
         puts("Error setting framerate");
+    display.setBrightness(ui.options.brightness * 6);
 }
 
 void Application::run()
