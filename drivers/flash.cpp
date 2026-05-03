@@ -27,65 +27,10 @@
 
 #include <drivers/flash.h>
 #include <drivers/hwmapping.h>
-#include <miosix.h>
-#include <kernel/scheduler/scheduler.h>
 #include <interfaces/delays.h>
 
 using namespace std;
 using namespace miosix;
-
-/**
- * DMA RX end of transfer
- */
-void __attribute__((naked)) DMA1_Stream3_IRQHandler()
-{
-    saveContext();
-    asm volatile("bl _Z20SPI2rxDmaHandlerImplv");
-    restoreContext();
-}
-
-/**
- * DMA TX end of transfer
- */
-void __attribute__((naked)) DMA1_Stream4_IRQHandler()
-{
-    saveContext();
-    asm volatile("bl _Z20SPI2txDmaHandlerImplv");
-    restoreContext();
-}
-
-static Thread *waiting;
-static bool error;
-
-/**
- * DMA RX end of transfer actual implementation
- */
-void __attribute__((used)) SPI2rxDmaHandlerImpl()
-{
-    if(DMA1->LISR & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3)) error=true;
-    DMA1->LIFCR=DMA_LIFCR_CTCIF3
-              | DMA_LIFCR_CTEIF3
-              | DMA_LIFCR_CDMEIF3;
-    waiting->IRQwakeup();
-    if(waiting->IRQgetPriority()>Thread::IRQgetCurrentThread()->IRQgetPriority())
-        Scheduler::IRQfindNextThread();
-    waiting=nullptr;
-}
-
-/**
- * DMA TX end of transfer actual implementation
- */
-void __attribute__((used)) SPI2txDmaHandlerImpl()
-{
-    if(DMA1->HISR & (DMA_HISR_TEIF4 | DMA_HISR_DMEIF4)) error=true;
-    DMA1->HIFCR=DMA_HIFCR_CTCIF4
-              | DMA_HIFCR_CTEIF4
-              | DMA_HIFCR_CDMEIF4;
-    waiting->IRQwakeup();
-    if(waiting->IRQgetPriority()>Thread::IRQgetCurrentThread()->IRQgetPriority())
-        Scheduler::IRQfindNextThread();
-    waiting=nullptr;
-}
 
 /**
  * Transfer a byte through SPI2 where the flash is connected
@@ -164,9 +109,6 @@ bool Flash::write(unsigned int addr, const void *data, int size)
             | SPI_CR1_SPE;
 
     waiting=Thread::getCurrentThread();
-    NVIC_ClearPendingIRQ(DMA1_Stream4_IRQn);
-    NVIC_SetPriority(DMA1_Stream4_IRQn,10);//Low priority for DMA
-    NVIC_EnableIRQ(DMA1_Stream4_IRQn);
 
     DMA1_Stream4->CR=0;
     DMA1_Stream4->PAR=reinterpret_cast<unsigned int>(&SPI2->DR);
@@ -181,18 +123,9 @@ bool Flash::write(unsigned int addr, const void *data, int size)
                 | DMA_SxCR_EN;     //Start DMA
     
     {
-        FastInterruptDisableLock dLock;
-        while(waiting!=nullptr)
-        {
-            waiting->IRQwait();
-            {
-                FastInterruptEnableLock eLock(dLock);
-                Thread::yield();
-            }
-        }
+        FastGlobalIrqLock dLock;
+        while(waiting) waiting->IRQglobalIrqUnlockAndWait(dLock);
     }
-                
-    NVIC_DisableIRQ(DMA1_Stream4_IRQn);
 
     //Wait for last byte to be sent
     while((SPI2->SR & SPI_SR_TXE)==0) ;
@@ -240,9 +173,6 @@ bool Flash::read(unsigned int addr, void *data, int size)
     SPI2->CR2=SPI_CR2_RXDMAEN;
 
     waiting=Thread::getCurrentThread();
-    NVIC_ClearPendingIRQ(DMA1_Stream3_IRQn);
-    NVIC_SetPriority(DMA1_Stream3_IRQn,10);//Low priority for DMA
-    NVIC_EnableIRQ(DMA1_Stream3_IRQn);
 
     DMA1_Stream3->CR=0;
     DMA1_Stream3->PAR=reinterpret_cast<unsigned int>(&SPI2->DR);
@@ -264,18 +194,10 @@ bool Flash::read(unsigned int addr, void *data, int size)
             | SPI_CR1_SPE;
         
     {
-        FastInterruptDisableLock dLock;
-        while(waiting!=nullptr)
-        {
-            waiting->IRQwait();
-            {
-                FastInterruptEnableLock eLock(dLock);
-                Thread::yield();
-            }
-        }
+        FastGlobalIrqLock dLock;
+        while(waiting) waiting->IRQglobalIrqUnlockAndWait(dLock);
     }
 
-    NVIC_DisableIRQ(DMA1_Stream3_IRQn);
     SPI2->CR1=0;
     
     //Quirk, disabling the SPI in RXONLY mode is difficult
@@ -291,6 +213,31 @@ bool Flash::read(unsigned int addr, void *data, int size)
 
     flash_cs::high();
     return !error;
+}
+
+Flash::Flash()
+{
+    {
+        GlobalIrqLock dLock;
+        flash_mosi::mode(Mode::ALTERNATE);
+        flash_mosi::alternateFunction(5);
+        flash_miso::mode(Mode::ALTERNATE);
+        flash_miso::alternateFunction(5);
+        flash_sck::mode(Mode::ALTERNATE);
+        flash_sck::alternateFunction(5);
+        flash_cs::mode(Mode::OUTPUT);
+        flash_cs::high();
+        RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+        RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
+        IRQregisterIrq(dLock,DMA1_Stream3_IRQn,&Flash::SPI2rxDmaHandler,this);
+        IRQregisterIrq(dLock,DMA1_Stream4_IRQn,&Flash::SPI2txDmaHandler,this);
+        SPI2->CR2=0;
+        SPI2->CR1=SPI_CR1_SSM  //Software cs
+                | SPI_CR1_SSI  //Hardware cs internally tied high
+                | SPI_CR1_MSTR //Master mode
+                | SPI_CR1_SPE; //SPI enabled
+    }
+    iprintf("FLASH\nstatus1=0x%x\nstatus2=0x%x\n",readStatus(1),readStatus(2));
 }
 
 void Flash::writeEnable()
@@ -310,25 +257,22 @@ unsigned short Flash::readStatus(int reg)
     return result;
 }
 
-Flash::Flash()
+void Flash::SPI2rxDmaHandler()
 {
-    {
-        FastInterruptDisableLock dLock;
-        flash_mosi::mode(Mode::ALTERNATE);
-        flash_mosi::alternateFunction(5);
-        flash_miso::mode(Mode::ALTERNATE);
-        flash_miso::alternateFunction(5);
-        flash_sck::mode(Mode::ALTERNATE);
-        flash_sck::alternateFunction(5);
-        flash_cs::mode(Mode::OUTPUT);
-        flash_cs::high();
-        RCC->AHB1ENR |= RCC_AHB1ENR_DMA1EN;
-        RCC->APB1ENR |= RCC_APB1ENR_SPI2EN;
-        SPI2->CR2=0;
-        SPI2->CR1=SPI_CR1_SSM  //Software cs
-                | SPI_CR1_SSI  //Hardware cs internally tied high
-                | SPI_CR1_MSTR //Master mode
-                | SPI_CR1_SPE; //SPI enabled
-    }
-    iprintf("FLASH\nstatus1=0x%x\nstatus2=0x%x\n",readStatus(1),readStatus(2));
+    if(DMA1->LISR & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3)) error=true;
+    DMA1->LIFCR=DMA_LIFCR_CTCIF3
+              | DMA_LIFCR_CTEIF3
+              | DMA_LIFCR_CDMEIF3;
+    if(waiting) waiting->IRQwakeup();
+    waiting=nullptr;
+}
+
+void Flash::SPI2txDmaHandler()
+{
+    if(DMA1->HISR & (DMA_HISR_TEIF4 | DMA_HISR_DMEIF4)) error=true;
+    DMA1->HIFCR=DMA_HIFCR_CTCIF4
+              | DMA_HIFCR_CTEIF4
+              | DMA_HIFCR_CDMEIF4;
+    if(waiting) waiting->IRQwakeup();
+    waiting=nullptr;
 }

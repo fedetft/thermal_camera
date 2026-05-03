@@ -27,7 +27,6 @@
 
 #include "display_er_oledm015.h"
 #include <miosix.h>
-#include <kernel/scheduler/scheduler.h>
 #include <interfaces/endianness.h>
 #include <algorithm>
 #include <line.h>
@@ -84,49 +83,34 @@ static void spi1waitCompletion()
     unused=SPI1->SR;
 }
 
+static Thread *waiting=nullptr;
+static bool error;
+
 /**
  * DMA TX end of transfer
- * NOTE: conflicts with SDIO driver but this board does not have and SD card
+ * NOTE: conflicts with SDIO driver but this board does not have an SD card
  */
-void __attribute__((naked)) DMA2_Stream3_IRQHandler()
+void SPI1txDmaHandlerImpl()
 {
-    saveContext();
-    asm volatile("bl _Z20SPI1txDmaHandlerImplv");
-    restoreContext();
-}
-
-static Thread *waiting=nullptr;
-static uint32_t error;
-
-void __attribute__((used)) SPI1txDmaHandlerImpl()
-{
-    uint32_t lisr = DMA2->LISR;
-    if(lisr & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3 | DMA_LIFCR_CFEIF3))
-        error=lisr;
+    if(DMA2->LISR & (DMA_LISR_TEIF3 | DMA_LISR_DMEIF3 | DMA_LIFCR_CFEIF3))
+        error=true;
     DMA2->LIFCR=DMA_LIFCR_CTCIF3
               | DMA_LIFCR_CTEIF3
               | DMA_LIFCR_CDMEIF3
               | DMA_LIFCR_CFEIF3;
-    if (!(DMA2_Stream3->CR & DMA_SxCR_EN) || (lisr & DMA_LISR_TCIF3)) {
-        waiting->IRQwakeup();
-        if(waiting->IRQgetPriority()>Thread::IRQgetCurrentThread()->IRQgetPriority())
-            Scheduler::IRQfindNextThread();
-        waiting=nullptr;
-    }
+    if(waiting) waiting->IRQwakeup();
+    waiting=nullptr;
 }
 
 static void spi1SendDMA(const Color *data, int size)
 {
-    error=0;
+    error=false;
     unsigned short tempCr1=SPI1->CR1;
     SPI1->CR1=0;
     SPI1->CR2=SPI_CR2_TXDMAEN;
     SPI1->CR1=tempCr1;
     
     waiting=Thread::getCurrentThread();
-    NVIC_ClearPendingIRQ(DMA2_Stream3_IRQn);
-    NVIC_SetPriority(DMA2_Stream3_IRQn,10);//Low priority for DMA
-    NVIC_EnableIRQ(DMA2_Stream3_IRQn);
 
     DMA2_Stream3->CR=0;
     DMA2_Stream3->PAR=reinterpret_cast<unsigned int>(&SPI1->DR);
@@ -145,23 +129,15 @@ static void spi1SendDMA(const Color *data, int size)
                    | DMA_SxCR_EN;     //Start DMA
     
     {
-        FastInterruptDisableLock dLock;
-        while(waiting!=nullptr)
-        {
-            waiting->IRQwait();
-            {
-                FastInterruptEnableLock eLock(dLock);
-                Thread::yield();
-            }
-        }
+        FastGlobalIrqLock dLock;
+        while(waiting) Thread::IRQglobalIrqUnlockAndWait(dLock);
     }
-    
-    NVIC_DisableIRQ(DMA2_Stream3_IRQn);
+
     spi1waitCompletion();
     SPI1->CR1=0;
     SPI1->CR2=0;
     SPI1->CR1=tempCr1;
-    //if(error) iprintf("SPI1 DMA tx failed LISR=%08lx\n", error); //TODO: look into why this fails
+    //if(error) puts("SPI1 DMA tx failed"); //TODO: look into why this fails
 }
 
 /**
@@ -256,12 +232,13 @@ namespace mxgui {
 DisplayErOledm015::DisplayErOledm015() : buffer(nullptr), buffer2(nullptr)
 {
     {
-        FastInterruptDisableLock dLock;
+        GlobalIrqLock dLock;
         cs::mode(Mode::OUTPUT);      cs::high();
         sck::mode(Mode::ALTERNATE);  sck::alternateFunction(5);
         mosi::mode(Mode::ALTERNATE); mosi::alternateFunction(5);
         dc::mode(Mode::OUTPUT);
         res::mode(Mode::OUTPUT);
+        IRQregisterIrq(dLock, DMA2_Stream3_IRQn, &SPI1txDmaHandlerImpl);
 
         RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
         RCC_SYNC();
@@ -270,7 +247,7 @@ DisplayErOledm015::DisplayErOledm015() : buffer(nullptr), buffer2(nullptr)
     SPI1->CR1=SPI_CR1_SSM  //No HW cs
             | SPI_CR1_SSI
             | SPI_CR1_SPE  //SPI enabled
-            | SPI_CR1_BR_0 //SPI clock 60/4=15 MHz (Fmax=20MHz)
+            | SPI_CR1_BR_0 //SPI clock 50/4=12.5 MHz (Fmax=20MHz)
             | SPI_CR1_MSTR;//Master mode
 
     res::high();

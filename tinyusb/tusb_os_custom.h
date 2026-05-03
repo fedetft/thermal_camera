@@ -157,7 +157,7 @@ TU_ATTR_ALWAYS_INLINE static inline bool osal_queue_receive(osal_queue_t qhdl, v
         qhdl->itemAvailable.timedWait(miosix::getTime() + (long long)msec * 1000000LL);
     bool success;
     {
-        miosix::FastInterruptDisableLock dLock;
+        miosix::FastGlobalIrqLock dLock;
         success = tu_fifo_read(&qhdl->fifo, data);
     }
     return success;
@@ -171,7 +171,7 @@ TU_ATTR_ALWAYS_INLINE static inline bool osal_queue_send(osal_queue_t qhdl, void
         qhdl->itemAvailable.IRQsignal();
     } else {
         {
-            miosix::FastInterruptDisableLock dLock;
+            miosix::FastGlobalIrqLock dLock;
             success = tu_fifo_write(&qhdl->fifo, data);
         }
         qhdl->itemAvailable.signal();

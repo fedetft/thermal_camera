@@ -28,6 +28,7 @@
 #pragma once
 
 #include <mutex>
+#include <miosix.h>
 
 /**
  * Class to access a 25Q64 FLASH memory
@@ -111,6 +112,18 @@ private:
      * \param reg 1 for status register 1, 2 for status register 2
      */
     unsigned short readStatus(int reg=1);
+
+    /**
+     * DMA RX end of transfer IRQ
+     */
+    void SPI2rxDmaHandler();
+
+    /**
+     * DMA TX end of transfer IRQ
+     */
+    void SPI2txDmaHandler();
     
     std::mutex m; ///Mutex to protect concurrent access to the hardware
+    miosix::Thread *waiting;
+    bool error;
 };

@@ -68,9 +68,9 @@ Application::Application(Display& display)
 void Application::run()
 {
     //High priority for sensor read, prevents I2C reads from starving
-    sensorThread = Thread::create(Application::sensorThreadMainTramp, 2048U, Priority(MAIN_PRIORITY+1), static_cast<void*>(this), Thread::JOINABLE);
+    sensorThread = Thread::create(Application::sensorThreadMainTramp, 2048U, Priority(DEFAULT_PRIORITY+1), static_cast<void*>(this), Thread::JOINABLE);
     //Low priority for processing, prevents display writes from starving
-    Thread *processThread = Thread::create(Application::processThreadMainTramp, 2048U, Priority(MAIN_PRIORITY-1), static_cast<void*>(this), Thread::JOINABLE);
+    Thread *processThread = Thread::create(Application::processThreadMainTramp, 2048U, Priority(DEFAULT_PRIORITY-1), static_cast<void*>(this), Thread::JOINABLE);
 
     //Drop first frame before starting the render thread
     MLX90640Frame *processedFrame=nullptr;
@@ -161,7 +161,7 @@ void Application::sensorThreadMain()
             if(success==false) puts("Error reading frame");
         } while(success==false);
         {
-            FastInterruptDisableLock dLock;
+            FastGlobalIrqLock dLock;
             success=rawFrameQueue.IRQput(rawFrame); //Nonblocking put
         }
         if(success==false)
@@ -250,7 +250,7 @@ void Application::usbThreadMain()
             char *p = hexDump(reinterpret_cast<const uint8_t *>(eeprom.eeprom), MLX90640EEPROM::eepromSize*2, hex);
             *p++ = '\r'; *p++ = '\n';
             usb->write(reinterpret_cast<uint8_t *>(hex), hexSize, usbWriteTimeout);
-            delete hex;
+            delete[] hex;
         } else if (strcmp(buf, "start_stream") == 0) {
             usbDumpRawFrames = true;
         } else if (strcmp(buf, "stop_stream") == 0) {
@@ -298,7 +298,7 @@ void Application::usbFrameOutputThreadMain()
             usb->write(reinterpret_cast<uint8_t *>(hex), hexSize, usbWriteTimeout);
         }
     }
-    delete hex;
+    delete[] hex;
 
     iprintf("usbOutputThread min free stack %d\n",
             MemoryProfiling::getAbsoluteFreeStack());

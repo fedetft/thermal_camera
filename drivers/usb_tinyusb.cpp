@@ -38,10 +38,26 @@ ConditionVariable txComplete;
 FastMutex rxMutex;
 ConditionVariable rxAvail;
 
+//
+// Interrupt handlers to be forwarded to TinyUSB
+//
+
+void OTG_FS_IRQHandler()
+{
+    tud_int_handler(0);
+}
+
+void OTG_HS_IRQHandler()
+{
+    tud_int_handler(1);
+}
+
 USBCDC::USBCDC(miosix::Priority intSvcThreadPrio)
 {
     {
-        FastInterruptDisableLock dLock;
+        GlobalIrqLock dLock;
+        IRQregisterIrq(dLock,OTG_FS_IRQn,OTG_FS_IRQHandler);
+        IRQregisterIrq(dLock,OTG_HS_IRQn,OTG_HS_IRQHandler);
         RCC->AHB2ENR |= RCC_AHB2ENR_OTGFSEN;
         RCC_SYNC();
         usb_dm::alternateFunction(10);
@@ -59,14 +75,17 @@ USBCDC::USBCDC(miosix::Priority intSvcThreadPrio)
         iprintf("USB initialization error\n");
         return;
     }
-    tinyusbThread=Thread::create(USBCDC::thread,2048U,intSvcThreadPrio,nullptr,0);
+    tinyusbThread=Thread::create(USBCDC::thread,2048U,intSvcThreadPrio,nullptr);
     iprintf("USB initialization OK, thread %p\n",reinterpret_cast<void*>(tinyusbThread));
 }
 
 USBCDC::~USBCDC()
 {
-    if (tinyusbThread)
+    if(tinyusbThread)
+    {
         tinyusbThread->terminate();
+        //tinyusbThread->join(); //FIXME: the USB thread doesn't terminate
+    }
 }
 
 void *USBCDC::thread(void *unused)
@@ -209,24 +228,6 @@ void USBCDC::prepareShutdown()
         txComplete.signal();
     }
     tinyusbThread->terminate();
-}
-
-//
-// Interrupt handlers to be forwarded to TinyUSB
-//
-
-__attribute__((naked)) void OTG_FS_IRQHandler(void)
-{
-    saveContext();
-    tud_int_handler(0);
-    restoreContext();
-}
-
-__attribute__((naked)) void OTG_HS_IRQHandler(void)
-{
-    saveContext();
-    tud_int_handler(1);
-    restoreContext();
 }
 
 //

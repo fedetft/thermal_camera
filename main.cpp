@@ -56,7 +56,7 @@ int main()
     initializeBoard();
     
     #ifdef WITH_CPU_TIME_COUNTER
-    Thread *profiler = Thread::create(profilerMain, 2048U, Priority(0), nullptr, 0);
+    Thread *profiler = Thread::create(profilerMain, 2048U, Priority(0), nullptr);
     #endif
 
     auto& display=DisplayManager::instance().getDisplay();
@@ -71,6 +71,7 @@ int main()
     display.turnOff();
     #ifdef WITH_CPU_TIME_COUNTER
     profiler->terminate();
+    profiler->join();
     #endif
     shutdownBoard();
 }

@@ -43,6 +43,7 @@
 #include "images/largecelsiusicon.h"
 #include "images/pauseicon.h"
 #include "images/usbicon.h"
+#include <util/version.h>
 #include <mxgui/misc_inst.h>
 #include <mxgui/display.h>
 #include <memory>
@@ -379,10 +380,10 @@ void ApplicationUI<IOHandler>::_drawMenuEntry(mxgui::DrawingContext& dc, int i,
     else dc.setTextColor(std::make_pair(unselectedFGColor,unselectedBGColor));
     if (value)
     {
-        TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(74,top+fontHeight-1), label, 0, 0, 3, 0);
-        TextBox::draw(dc, mxgui::Point(75,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), value, 0, 0, 0, 3);
+        TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(74,top+fontHeight-1), label, TextBox::ClipPartialLines, 0, 3, 0, 0);
+        TextBox::draw(dc, mxgui::Point(75,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), value, TextBox::ClipPartialLines, 0, 0, 3, 0);
     } else {
-        TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), label, 0, 0, 3, 3);
+        TextBox::draw(dc, mxgui::Point(0,top), mxgui::Point(dc.getWidth()-1,top+fontHeight-1), label, TextBox::ClipPartialLines, 0, 3, 3, 0);
     }
 }
 

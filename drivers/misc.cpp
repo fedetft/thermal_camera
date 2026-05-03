@@ -34,7 +34,7 @@ using namespace miosix;
 void initializeBoard()
 {
     {
-        FastInterruptDisableLock dLock;
+        FastGlobalIrqLock dLock;
         RCC->APB2ENR |= RCC_APB2ENR_ADC1EN;
         RCC_SYNC();
         up_btn::mode(Mode::INPUT_PULL_UP);
