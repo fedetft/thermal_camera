@@ -1,24 +1,34 @@
 ##
-## Makefile for Miosix embedded OS
+## Makefile template for Miosix embedded OS kernel-side applications
 ##
-MAKEFILE_VERSION := 1.10
-## Path to kernel directory (edited by init_project_out_of_git_repo.pl)
-KPATH := miosix-kernel/miosix
-## Path to config directory (edited by init_project_out_of_git_repo.pl)
-CONFPATH := .
-include $(CONFPATH)/config/Makefile.inc
 
-##
-## List here subdirectories which contains makefiles
-##
-SUBDIRS := $(KPATH) mxgui tinyusb
+## Path to the Miosix kernel root (miosix-kernel/miosix)
+KPATH := miosix-kernel/miosix
+
+## Path to the Miosix config root, containing:
+##  - config/Makefile.inc
+##  - config/miosix_config.h (optional)
+##  - config/board/<board name>/board_config.h (optional)
+## Leave it as $(KPATH) to use the default settings built in to miosix. Any
+## missing file is replaced by the defaults as well.
+##   To change the config, copy and paste the miosix/config directory to
+## your project root and change this path to the project root (typically ".")
+CONFPATH := .
+
+## When using CONFPATH := $(KPATH) you can choose the board here. You can also
+## override other variables defined by Makefile.inc.
+# OPT_BOARD := [options in miosix-kernel/miosix/config/Makefile.inc]
+
+## Include the Miosix common makefile for kernel-side applications
+MAKEFILE_VERSION := 3.01
+include $(KPATH)/Makefile.kcommon
 
 ##
 ## List here your source files (both .s, .c and .cpp)
 ##
 SRC :=                                             \
 main.cpp application.cpp renderer.cpp colormap.cpp \
-textbox.cpp version.cpp                            \
+version.cpp                                        \
 drivers/display_er_oledm015.cpp drivers/misc.cpp   \
 drivers/mlx90640.cpp drivers/MLX90640_API.cpp      \
 drivers/flash.cpp drivers/options_save.cpp         \
@@ -52,90 +62,37 @@ SRC := $(SRC2) $(SRC)
 VERSION := $(shell if ! git describe --always 2> /dev/null; then echo 0000000; fi)
 
 ##
+## List here additional include directories (in the form -Iinclude_dir)
+##
+INCLUDE_DIRS := -I. -I./mxgui -I./tinyusb/tinyusb/src -I./tinyusb
+
+##
 ## List here additional static libraries with relative path
 ##
 LIBS := mxgui/libmxgui.a tinyusb/libtinyusb.a
 
 ##
-## List here additional include directories (in the form -Iinclude_dir)
+## List here subdirectories which contains makefiles
 ##
-INCLUDE_DIRS := -I. -I./mxgui -I./tinyusb/tinyusb/src -I./tinyusb
+SUBDIRS += mxgui tinyusb
 
-##############################################################################
-## You should not need to modify anything below                             ##
-##############################################################################
+##
+## Attach a romfs filesystem image after the kernel
+##
+ROMFS_DIR :=
 
-ifeq ("$(VERBOSE)","1")
-Q := 
-ECHO := @true
-else
-Q := @
-ECHO := @echo
-endif
+all: $(if $(ROMFS_DIR), image, main)
 
-## Replaces both "foo.cpp"-->"foo.o" and "foo.c"-->"foo.o"
-OBJ := $(addsuffix .o, $(basename $(SRC)))
-
-## Includes the miosix base directory for C/C++
-## Always include CONFPATH first, as it overrides the config file location
-CXXFLAGS := $(CXXFLAGS_BASE) -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
-            -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -DTC_VERSION=\"$(VERSION)\"
-CFLAGS   := $(CFLAGS_BASE)   -I$(CONFPATH) -I$(CONFPATH)/config/$(BOARD_INC)  \
-            -I. -I$(KPATH) -I$(KPATH)/arch/common -I$(KPATH)/$(ARCH_INC)      \
-            -I$(KPATH)/$(BOARD_INC) $(INCLUDE_DIRS) -DTC_VERSION=\"$(VERSION)\"
-AFLAGS   := $(AFLAGS_BASE)
-LFLAGS   := $(LFLAGS_BASE)
-DFLAGS   := -MMD -MP
-
-## libmiosix.a is among stdlibs because needs to be within start/end group
-STDLIBS  := -lmiosix -lstdc++ -lc -lm -lgcc -latomic
-LINK_LIBS := $(LIBS) -L$(KPATH) -Wl,--start-group $(STDLIBS) -Wl,--end-group
-
-all: all-recursive main
-
-clean: clean-recursive clean-topdir
-
-program:
-	$(PROGRAM_CMDLINE)
-
-all-recursive:
-	$(foreach i,$(SUBDIRS),$(MAKE) -C $(i)                               \
-	  KPATH=$(shell perl $(KPATH)/_tools/relpath.pl $(i) $(KPATH))       \
-	  CONFPATH=$(shell perl $(KPATH)/_tools/relpath.pl $(i) $(CONFPATH)) \
-	  || exit 1;)
-
-clean-recursive:
-	$(foreach i,$(SUBDIRS),$(MAKE) -C $(i)                               \
-	  KPATH=$(shell perl $(KPATH)/_tools/relpath.pl $(i) $(KPATH))       \
-	  CONFPATH=$(shell perl $(KPATH)/_tools/relpath.pl $(i) $(CONFPATH)) \
-	  clean || exit 1;)
-
-clean-topdir:
-	-rm -f $(OBJ) main.elf main.hex main.bin main.map $(OBJ:.o=.d)
-
-main: main.elf
+main: $(OBJ) all-recursive
+	$(ECHO) "[LD  ] main.elf"
+	$(Q)$(CXX) $(LFLAGS) -o main.elf $(OBJ) $(LINK_LIBS)
 	$(ECHO) "[CP  ] main.hex"
 	$(Q)$(CP) -O ihex   main.elf main.hex
 	$(ECHO) "[CP  ] main.bin"
 	$(Q)$(CP) -O binary main.elf main.bin
 	$(Q)$(SZ) main.elf
 
-main.elf: $(OBJ) all-recursive
-	$(ECHO) "[LD  ] main.elf"
-	$(Q)$(CXX) $(LFLAGS) -o main.elf $(OBJ) $(KPATH)/$(BOOT_FILE) $(LINK_LIBS)
+clean: clean-recursive
+	$(Q)rm -f $(OBJ) $(OBJ:.o=.d) main.elf main.hex main.bin main.map
 
-%.o: %.s
-	$(ECHO) "[AS  ] $<"
-	$(Q)$(AS)  $(AFLAGS) $< -o $@
-
-%.o : %.c
-	$(ECHO) "[CC  ] $<"
-	$(Q)$(CC)  $(DFLAGS) $(CFLAGS) $< -o $@
-
-%.o : %.cpp
-	$(ECHO) "[CXX ] $<"
-	$(Q)$(CXX) $(DFLAGS) $(CXXFLAGS) $< -o $@
-
-#pull in dependecy info for existing .o files
 -include $(OBJ:.o=.d)
