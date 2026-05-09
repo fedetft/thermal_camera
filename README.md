@@ -14,14 +14,14 @@ This guide assumes you already have a Miosix build environment installed, if not
 [here](https://miosix.org/wiki/index.php?title=Linux_Quick_Start).
 
 ```
+# Dependencies (should work both on Linux and WSL)
+sudo apt install build-essential cmake libboost-all-dev libpng-dev
+
 # Submodules
 git submodule init
 git submodule update
 
-# Fix Makefile version
-sed -i 's/MAKEFILE_VERSION := 1.09/MAKEFILE_VERSION := 1.10/' mxgui/Makefile
-
-# Code generators
+# Build mxgui code generators for embedding images and fonts
 cd mxgui/_tools/code_generators
 chmod +x compile_freetype.sh
 mkdir build
@@ -29,9 +29,9 @@ cd build
 cmake ..
 make
 
-# Build
+# Build the thermal camera application
 cd ../../../..
-make -j
+make -j`nproc`
 ```
 
 How to flash
