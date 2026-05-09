@@ -4,8 +4,8 @@ Thermal camera
 
 An open source thermal camera, including firmware, schematic and PCB design.
 
-More documentation coming soon.
-
+![UI example](https://github.com/fedetft/thermal_camera/raw/master/ui-picture.jpg)
+![PCB render](https://github.com/fedetft/thermal_camera/raw/master/pcb-render.png)
 
 How to build
 ============
